@@ -669,39 +669,62 @@ a{color:inherit;}
     height:auto;
     aspect-ratio:var(--ar);
   }
-  /* the header strip (code + Close) now gets a FIXED height instead of one
-     derived from measuring rendered text — that measurement was the actual
-     cause of it coming out a different height on a fresh, unscrolled page
-     load vs after scrolling (a font-swap/timing race, not anything to do
-     with the photo below it, despite how it looked). A fixed height can't
-     drift regardless of timing, and the photo starts flush right after it
-     every time — if a tall portrait photo doesn't fit the remaining screen
-     height, it's fine for it to just run off the bottom uncropped-by-us
-     (filmrow's own overflow:hidden already handles that). align-items:center
-     also sidesteps line-height/padding-based positioning entirely, which is
-     what the Close-vs-code baseline mismatch turned out to hinge on. */
+  /* one number, used by both halves of the viewer header below — the whole
+     point is that .tag and .vclose can never disagree about it */
+  :root{ --vhead:48px; }
+
+  /* THE header strip (photo code on the left, Close on the right). Two
+     separate elements — .tag lives inside the frame, .vclose is a single
+     position:fixed button shared by every frame — so the only thing making
+     them read as one white plate is that both are exactly --vhead tall, at
+     top:0, in --paper. Everything below exists to guarantee that.
+
+     flex-shrink:0 is the important one, and was the actual bug: .frame is a
+     column flex container with height:100%, so tag + photo compete for the
+     screen's height. A tall photo (375px wide × 9:16 ≈ 667px) plus the
+     header doesn't fit a short phone (iPhone SE is 667px tall), and since
+     .tag has overflow:hidden — which makes its automatic minimum size 0
+     instead of content-based — the flex algorithm happily crushed the whole
+     header down to ~3px to make room, while .vclose (not in this flex
+     container at all) stayed full height. That's the "collapsed title, tall
+     white Close box" symptom, and it's exactly why the header's height
+     looked like it depended on the photo: it did. Opting out of shrinking
+     makes the header's height a constant, and the photo simply runs past the
+     bottom of a short screen instead (filmrow's overflow:hidden clips it).
+
+     line-height:var(--vhead) rather than flex centering: .vclose is a
+     <button>, and WebKit wraps a button's children in an anonymous block,
+     which historically makes align-items/justify-content inside a button do
+     nothing. Centering both by line-height instead uses no flex at all, so
+     the code text and Close land on the same baseline by construction on
+     every engine — no JS measurement, nothing to drift. */
   .frame .tag{
-    height:48px;
-    display:flex;
-    align-items:center;
+    height:var(--vhead);
+    flex-shrink:0;
+    line-height:var(--vhead);
     /* left inset matches the main header's own var(--pad), the same as
        "House of Walk" sits from the edge — so closing back out to the main
-       page doesn't jump the eye sideways. */
-    padding:0 4px 0 var(--pad);
+       page doesn't jump the eye sideways. Right inset clears .vclose's plate
+       so a long code truncates with an ellipsis instead of sliding under it. */
+    padding:0 76px 0 var(--pad);
+    text-overflow:ellipsis;
     margin-bottom:-1px; /* seam-hiding overlap into the photo below, see the
       viewer .filmrow notes elsewhere for why this is here */
   }
   /* the desktop drag-bar assumes a mouse; swipe + scroll-snap replaces it */
   .hscroll{display:none;}
-  /* fixed height, matching .frame .tag exactly — no JS measurement/sync
-     needed for this tier at all anymore (see layoutFrames). Right inset
-     matches var(--pad), the same as Dark/Light sits from the edge, so Close
-     sits exactly where Dark will be once the viewer closes. */
+  /* the other half of the header plate — same --vhead height, same
+     line-height centering, same paper background as .frame .tag, so the two
+     abut seamlessly and read as one strip with Close sitting on top of it at
+     the right. No JS measurement or height sync for this tier at all
+     anymore (see layoutFrames). Right inset matches var(--pad), the same as
+     Dark/Light sits from the edge, so Close is exactly where Dark will be
+     once the viewer closes. */
   .vclose{
-    height:48px;
-    display:flex;
-    align-items:center;
-    justify-content:flex-end;
+    height:var(--vhead);
+    line-height:var(--vhead);
+    display:block;
+    text-align:right;
     padding:0 var(--pad) 0 4px;
   }
   /* essay: title on one line, subheading strictly in the left column with
@@ -1758,7 +1781,13 @@ a{color:inherit;}
        cause or which browser is rendering it. */
     var tagTextEl = frameEls.length ? frameEls[0].querySelector('.tag span') : null;
     var vcloseTextEl = vclose.querySelector('span');
-    if(tagTextEl && vcloseTextEl){
+    if(mobileQuery.matches){
+      /* not needed on mobile: both halves of the header centre their text
+         with the same line-height:var(--vhead) on the same fixed box height,
+         so they're on the same baseline by construction. Clear anything a
+         previous wider-viewport layout pass left behind. */
+      if(vcloseTextEl) vcloseTextEl.style.top = '0px';
+    } else if(tagTextEl && vcloseTextEl){
       /* padding-top alone didn't converge in one measurement — a single
          corrected value, re-measured, still showed a residual gap, which
          means whatever's actually causing this doesn't scale linearly with
