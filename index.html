@@ -140,11 +140,27 @@ a{color:inherit;}
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:1.15em;
-  transition:opacity .5s ease;
+  /* 2px tighter than it reads on paper: the gap is measured to the text's
+     box, and a line of digits leaves a sliver of air above its own cap
+     height, so an even-looking gap has to be slightly smaller than an even
+     one */
+  gap:calc(1.15em - 2px);
+  /* the curtain: same easing and the same upward exit as the viewer's
+     shutter, so opening the site and closing a photograph are recognisably
+     the same gesture. The delay lets the planet fade first, rather than
+     being sliced in half on its way out. */
+  clip-path:inset(0 0 0 0);
+  transition:clip-path .62s cubic-bezier(.76,0,.24,1) .16s;
 }
-.preloader.done{opacity:0; pointer-events:none;}
-/* taken out of the layer tree entirely once it has faded — an invisible
+.preloader-orb,
+.preloader-pct{transition:opacity .16s ease;}
+.preloader.done{
+  clip-path:inset(0 0 100% 0);
+  pointer-events:none;
+}
+.preloader.done .preloader-orb,
+.preloader.done .preloader-pct{opacity:0;}
+/* taken out of the layer tree entirely once it has gone — an invisible
    fixed element over the whole viewport is still a fixed element */
 .preloader.gone{display:none;}
 .preloader-orb{
@@ -186,6 +202,12 @@ a{color:inherit;}
   font-size:var(--ui-size);
   color:var(--ink);
   font-variant-numeric:tabular-nums;
+  /* the % sign carries less ink on its right side than the digits do on the
+     left, so a geometrically centred string sits visibly left of the orb
+     above it. Nudged back by eye, not by measurement — which is the only
+     way optical centring ever works. transform rather than a margin, so the
+     flex centring it is correcting stays untouched. */
+  transform:translateX(2px);
 }
 @keyframes planet-spin{
   from{transform:rotate(0deg);}
@@ -1249,115 +1271,6 @@ a{color:inherit;}
     });
   });
 
-  /* ---------- preloader ----------
-     Warms the whole grid's thumbnails (82 files, ~1.7MB) before revealing
-     the page, reporting real progress rather than a guessed animation. It
-     starts here, immediately after ARCHIVE is built, so the fetching begins
-     before any of the layout work below runs. */
-  (function(){
-    var el = document.getElementById('preloader');
-    if(!el) return;
-    var barEl = document.getElementById('preloaderBar');
-    var pctEl = document.getElementById('preloaderPct');
-    var CX = 50, CY = 50, R = 46;
-
-    /* the arc is an explicit path rather than the usual stroke-dashoffset
-       trick: with a path, "starts at twelve o'clock" and "runs
-       counter-clockwise" are just a start angle and a sweep flag, instead of
-       a mirrored transform whose handedness has to be reasoned about. */
-    function setArc(p){
-      p = Math.max(0, Math.min(1, p));
-      if(p <= 0){ barEl.setAttribute('d',''); return; }
-      /* a whole turn would put the start and end points on top of each
-         other, which SVG renders as nothing at all — stop a hair short of
-         closing the seam */
-      var span = Math.min(p, 0.9999) * 360;
-      var a0 = -90 * Math.PI/180;
-      var a1 = (-90 - span) * Math.PI/180;
-      var x0 = CX + R*Math.cos(a0), y0 = CY + R*Math.sin(a0);
-      var x1 = CX + R*Math.cos(a1), y1 = CY + R*Math.sin(a1);
-      barEl.setAttribute('d',
-        'M'+x0.toFixed(3)+' '+y0.toFixed(3)+
-        ' A'+R+' '+R+' 0 '+(span > 180 ? 1 : 0)+' 0 '+x1.toFixed(3)+' '+y1.toFixed(3));
-    }
-
-    var sources = [];
-    ARCHIVE.forEach(function(f){ if(f.thumb) sources.push(f.thumb); });
-    var total = sources.length;
-    var loaded = 0;
-    var targetP = total ? 0 : 1;
-    var shownP = 0;
-    var finished = false;
-
-    /* nothing can scroll behind a full-screen loader anyway, but without
-       this a flick during the wait lands the reader somewhere down the grid
-       the moment it lifts. Its own property, not body.overflow, which the
-       viewer owns. */
-    document.documentElement.style.overflow = 'hidden';
-
-    function finish(){
-      if(finished) return;
-      finished = true;
-      setArc(1);
-      pctEl.textContent = '100%';
-      el.setAttribute('aria-valuenow', 100);
-      document.documentElement.style.overflow = '';
-      el.classList.add('done');
-      /* by timer rather than transitionend: prefers-reduced-motion kills the
-         transition outright, and an event that never fires would leave the
-         element in the layer tree forever */
-      setTimeout(function(){ el.classList.add('gone'); }, 560);
-    }
-
-    function frame(){
-      if(finished) return;
-      /* ease the displayed value toward the real one: 82 images means the
-         raw number steps 1.2% at a time, and several often land in the same
-         frame, which reads as stuttering rather than loading. 0.18 settles
-         a standing start in a little over half a second, which is what a
-         repeat visit with everything already cached actually sees — slow
-         enough to read as a count-up, quick enough not to be a toll gate. */
-      shownP += (targetP - shownP) * 0.18;
-      if(targetP - shownP < 0.001) shownP = targetP;
-      setArc(shownP);
-      var pct = Math.round(shownP*100);
-      pctEl.textContent = pct+'%';
-      el.setAttribute('aria-valuenow', pct);
-      if(targetP >= 1 && shownP >= 0.999){ finish(); return; }
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-
-    /* a bounded queue rather than 82 parallel requests. Over HTTP/2 they'd
-       all be multiplexed and finish in a clump near the end, so the number
-       would sit at 0% and then jump; in order, a few at a time, progress
-       moves steadily and the top of the grid is ready first. */
-    var next = 0, inFlight = 0, MAX_PARALLEL = 8;
-    function pump(){
-      while(inFlight < MAX_PARALLEL && next < total){
-        var img = new Image();
-        inFlight++;
-        var settle = function(){
-          inFlight--;
-          loaded++;
-          targetP = loaded/total;
-          pump();
-        };
-        img.onload = settle;
-        img.onerror = settle; /* a missing file must not hold the door shut */
-        img.src = sources[next++];
-      }
-    }
-    pump();
-    if(!total) targetP = 1;
-
-    /* a hard ceiling on how long this can hold the page. A stalled request
-       or a bad connection must never leave someone stuck behind a loader
-       with no way through — past this point the grid simply fills in as it
-       always did. */
-    setTimeout(finish, 15000);
-  })();
-
   /* grid uses the small thumb (cheap to scroll past hundreds of them),
      the fullscreen viewer uses the full-size image */
   function phHtml(f, zoomable, addNoise, useThumb){
@@ -1367,7 +1280,14 @@ a{color:inherit;}
       return '<div class="'+cls+'">'+grain+'</div>';
     }
     if(useThumb){
-      return '<div class="'+cls+'"><img src="'+f.thumb+'" loading="lazy" alt="">'+grain+'</div>';
+      /* no src yet, deliberately. The grid's images are handed their source
+         explicitly — the first couple of screens by the preloader, the rest
+         by the scroll pass as you approach them (see loadDownTo). Native
+         loading="lazy" can't be told "have these in hand before the curtain
+         lifts", which is what left the reveal landing on empty plates: the
+         preloader was warming its own copies while the grid's own images
+         hadn't been asked for at all. */
+      return '<div class="'+cls+'"><img data-src="'+f.thumb+'" alt="">'+grain+'</div>';
     }
     /* viewer: the thumb is already cached from the grid, so it paints
        instantly; the full-res image fades in over it once it has actually
@@ -1532,6 +1452,230 @@ a{color:inherit;}
     });
   }
   watchPhImages(grid);
+
+  /* ---------- image loading + preloader ----------
+     Two halves of one thing. The preloader holds the page until the first
+     couple of screens of thumbnails are decoded and in the document, so the
+     curtain lifts onto real photographs rather than grey plates; everything
+     past that arrives on approach as you scroll. */
+  (function(){
+    var cells = Array.prototype.slice.call(grid.querySelectorAll('.cell'));
+
+    var revealed = false;
+    function imgOf(cell){ return cell.querySelector('.ph img[data-src]'); }
+    function startLoad(img){
+      if(!img || img.getAttribute('src')) return false;
+      /* a photo arriving changes its row's height, which can bring the next
+         row inside the runway without anyone having scrolled — so every
+         arrival re-checks. Costs one comparison, thanks to the cursor. While
+         the curtain is still up this stays off: the first screens are meant
+         to have the connection to themselves. */
+      img.addEventListener('load', function(){ if(revealed) loadForScroll(); }, {once:true});
+      img.setAttribute('src', img.getAttribute('data-src'));
+      return true;
+    }
+
+    /* THE first portion: whatever the grid puts inside the first two screens,
+       which is what someone actually sees before they scroll — a count would
+       be wrong at one breakpoint or the other, since the same 24 photos are
+       eight rows on a phone and four on a desktop. Floored so a very short
+       window still gets a sensible batch, capped so a very tall one doesn't
+       turn the loader into a wait for half the archive. */
+    var vh = window.innerHeight || 800;
+    var firstCount = 0;
+    for(var i=0;i<cells.length;i++){
+      if(cells[i].offsetTop < vh*2) firstCount++;
+      else break;
+    }
+    firstCount = Math.min(cells.length, Math.max(12, Math.min(30, firstCount)));
+
+    /* THE rest, on approach: everything down to two and a half viewport
+       heights from the current scroll position, which is the screen you are
+       on plus a screen and a half of runway. Far enough ahead that an
+       ordinary scroll never outruns it, near enough that opening the page
+       and leaving it alone doesn't pull the whole archive down.
+
+       A cursor rather than a filter: the grid is in document order and rows
+       only ever move down the page, so every cell before the cursor is
+       already loaded and nothing has to be rescanned. The whole pass costs
+       one comparison once the cursor has caught up.
+
+       Deliberately not IntersectionObserver. It would be the idiomatic
+       choice, but it only reports through the rendering pipeline, so in any
+       context where that is suspended it silently never fires and the grid
+       below the first screens would simply stay empty — and "silently never
+       fires" is not a failure mode worth taking on for the thing that
+       delivers the actual photographs. Scroll position is a number that can
+       be read at any time. */
+    var cursor = 0;
+    function loadDownTo(limitY){
+      while(cursor < cells.length && cells[cursor].offsetTop <= limitY){
+        startLoad(imgOf(cells[cursor]));
+        cursor++;
+      }
+    }
+    function loadForScroll(){
+      var top = window.pageYOffset || document.documentElement.scrollTop || 0;
+      loadDownTo(top + (window.innerHeight || 800) * 2.5);
+    }
+    function watchRest(){
+      revealed = true;
+      loadForScroll();
+      window.addEventListener('scroll', loadForScroll, {passive:true});
+      window.addEventListener('resize', loadForScroll);
+    }
+
+    var el = document.getElementById('preloader');
+    if(!el){ watchRest(); return; }
+    var barEl = document.getElementById('preloaderBar');
+    var pctEl = document.getElementById('preloaderPct');
+    var CX = 50, CY = 50, R = 46;
+
+    /* the arc is an explicit path rather than the usual stroke-dashoffset
+       trick: with a path, "starts at twelve o'clock" and "runs
+       counter-clockwise" are just a start angle and a sweep flag, instead of
+       a mirrored transform whose handedness has to be reasoned about. */
+    function setArc(p){
+      if(p <= 0){ barEl.setAttribute('d',''); return; }
+      /* a whole turn would put the start and end points on top of each
+         other, which SVG renders as nothing at all — stop a hair short of
+         closing the seam */
+      var span = Math.min(p, 0.9999) * 360;
+      var a0 = -90 * Math.PI/180;
+      var a1 = (-90 - span) * Math.PI/180;
+      var x0 = CX + R*Math.cos(a0), y0 = CY + R*Math.sin(a0);
+      var x1 = CX + R*Math.cos(a1), y1 = CY + R*Math.sin(a1);
+      barEl.setAttribute('d',
+        'M'+x0.toFixed(3)+' '+y0.toFixed(3)+
+        ' A'+R+' '+R+' 0 '+(span > 180 ? 1 : 0)+' 0 '+x1.toFixed(3)+' '+y1.toFixed(3));
+    }
+
+    var lastPct = -1;
+    function render(p){
+      p = Math.max(0, Math.min(1, p));
+      setArc(p);
+      var pct = Math.round(p*100);
+      if(pct === lastPct) return;
+      lastPct = pct;
+      pctEl.textContent = pct+'%';
+      el.setAttribute('aria-valuenow', pct);
+    }
+
+    var batch = [];
+    for(var j=0;j<firstCount;j++){
+      var im = imgOf(cells[j]);
+      if(im) batch.push(im);
+    }
+    var total = batch.length;
+    var loaded = 0;
+    var targetP = total ? 0 : 1;
+    var shownP = 0;
+    var finished = false;
+
+    /* nothing can scroll behind a full-screen curtain anyway, but without
+       this a flick during the wait lands the reader somewhere down the grid
+       the moment it lifts. Its own property, not body.overflow, which the
+       viewer owns. */
+    document.documentElement.style.overflow = 'hidden';
+
+    var stepTimer = null;
+    function finish(){
+      if(finished) return;
+      finished = true;
+      if(stepTimer){ clearInterval(stepTimer); stepTimer = null; }
+      render(1);
+      document.documentElement.style.overflow = '';
+      /* the rest of the archive only starts loading now: while the curtain
+         was up the first screens had the connection to themselves, which is
+         the whole point of holding it. */
+      watchRest();
+      el.classList.add('done');
+      /* by timer rather than transitionend: prefers-reduced-motion removes
+         the transition outright, and an event that never fires would leave a
+         full-screen element sitting over the page forever */
+      setTimeout(function(){ el.classList.add('gone'); }, 900);
+    }
+
+    /* setInterval, not requestAnimationFrame. rAF is the better tool when it
+       runs, but it is suspended outright in some embedded webviews and
+       whenever the page isn't compositing — and when it doesn't run, the
+       readout silently freezes at 0% while the images load behind it, which
+       is exactly the failure this replaces. A timer always fires.
+
+       The easing is driven by elapsed time rather than by counting ticks,
+       which matters for the same reason: a throttled timer firing once a
+       second would otherwise take ten seconds to cover the ground it should
+       cover in half of one. Same curve, expressed per millisecond instead of
+       per frame, so the count-up lasts the same ~0.6s at any tick rate. */
+    var EASE_PER_FRAME = 0.18, FRAME_MS = 1000/60;
+    var lastStep = (window.performance && performance.now) ? performance.now() : Date.now();
+    function step(){
+      if(finished) return;
+      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      var dt = Math.min(1000, Math.max(0, now - lastStep));
+      lastStep = now;
+      var k = 1 - Math.pow(1 - EASE_PER_FRAME, dt/FRAME_MS);
+      shownP += (targetP - shownP) * k;
+      if(targetP - shownP < 0.001) shownP = targetP;
+      render(shownP);
+      if(targetP >= 1 && shownP >= 0.999) finish();
+    }
+    stepTimer = setInterval(step, 16);
+
+    /* The load event is what the queue waits on. decode() is requested too,
+       so the first paint after the curtain has nothing left to do — but it
+       is deliberately NOT awaited: decode() carries no guarantee that it
+       ever settles (in a context that isn't compositing it simply never
+       does), and one promise that never resolves stalls every image queued
+       behind it. The curtain's own ~780ms is the real headroom a decode
+       needs, and it runs after the last load has landed.
+
+       An error settles exactly like a load: a missing file must not hold
+       the door shut. */
+    function settleOn(img, settle){
+      var fired = false;
+      function done(){
+        if(fired) return;
+        fired = true;
+        if(img.decode){ try{ img.decode().catch(function(){}); }catch(e){} }
+        settle();
+      }
+      /* out of line even when it's already there, so settle() never re-enters
+         pump() from inside pump()'s own loop */
+      if(img.complete && img.naturalWidth){ setTimeout(done, 0); return; }
+      img.addEventListener('load', done, {once:true});
+      img.addEventListener('error', done, {once:true});
+    }
+
+    var next = 0, inFlight = 0, MAX_PARALLEL = 6;
+    function pump(){
+      while(inFlight < MAX_PARALLEL && next < total){
+        var img = batch[next++];
+        inFlight++;
+        (function(one){
+          var done = false;
+          function settle(){
+            if(done) return;      /* decode() and the load event can both land */
+            done = true;
+            inFlight--;
+            loaded++;
+            targetP = loaded/total;
+            pump();
+          }
+          startLoad(one);
+          settleOn(one, settle);
+        })(img);
+      }
+    }
+    if(total){ pump(); } else { targetP = 1; }
+    render(0);
+
+    /* a hard ceiling on how long this can hold the page. A stalled request
+       or a bad connection must never leave someone stuck behind a curtain
+       with no way through — past this point the grid simply fills in as it
+       goes, the way it always did. */
+    setTimeout(finish, 12000);
+  })();
 
   /* ---------- mobile (<=680px): 3-column grid, so card labels have far less
      room than the desktop --ui-size assumes. Compute one font-size, applied
