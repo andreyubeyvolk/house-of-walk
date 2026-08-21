@@ -256,7 +256,11 @@ a{color:inherit;}
      predictable than the old per-series gradient placeholder */
   background:#E0E0E0;
 }
-.ph::after{
+/* the vignette belongs to the photograph, not to the empty slot it fades in
+   over: .loaded is added (see watchPhImages in JS) once there's an actual
+   image under it, so the placeholder stays a flat neutral swatch and only
+   real photos get darkened corners. */
+.ph.loaded::after{
   content:'';
   position:absolute;inset:0;
   background:radial-gradient(120% 120% at 50% 15%, transparent 45%, rgba(0,0,0,.28) 100%);
@@ -627,6 +631,28 @@ a{color:inherit;}
 
 /* ---------- mobile ---------- */
 @media (max-width:680px){
+  /* the three numbers the header and the viewer's own header share. --vhead
+     is a fallback only: JS measures the real .topbar and writes the exact
+     value back into this property (see syncViewerHeadMetrics), because
+     "exactly as tall as the header" can't be expressed in CSS when the
+     header's height comes from font metrics. */
+  :root{
+    --head-pt:24px;
+    --head-pb:4px;
+    --vhead:59px;
+  }
+  /* static on mobile — no shrink-on-scroll. The compact class is still
+     toggled by JS for wider screens, so neutralise it here rather than
+     relying on it never being added, and drop the padding transition so
+     nothing can animate the height the viewer header is matched against.
+     --head-pb:4px puts the header's bottom edge exactly 4px below the
+     A.UBV. line, which is the bottom of .word — the tallest thing in the
+     row, so it alone decides where the header ends. */
+  .topbar,
+  .topbar.compact{
+    padding:var(--head-pt) var(--pad) var(--head-pb);
+    transition:background-color .25s ease;
+  }
   .grid{
     grid-template-columns:repeat(3,1fr);
     gap:14px 8px;
@@ -664,68 +690,96 @@ a{color:inherit;}
   .frame .phwrap{
     width:100%;
   }
+  /* half a pixel of bleed into the gap on each side. openViewer now computes
+     an exact, device-pixel-aligned scroll offset (see the note there), but a
+     mandatory scroll-snap container gets the last word on where it actually
+     comes to rest, and on a device whose frame pitch isn't a whole number of
+     pixels that resting place is inherently fractional. Rather than fight
+     the scroll engine for the final sub-pixel, make it not matter: the photo
+     overhangs its frame by half a pixel, so any hairline crack at the edge
+     shows more photo instead of the near-white gap behind it. object-fit
+     :cover absorbs the extra width by cropping a hair more, with no
+     distortion, and the visible gap between photos goes 10px → 9px. */
   .frame .ph{
-    width:100%;
+    width:calc(100% + 1px);
+    /* .phwrap is a flex row, so without this the one extra pixel is simply
+       shrunk straight back off again — .ph has overflow:hidden, which makes
+       its automatic minimum size 0, so it compresses to fit rather than
+       overhanging. Same rule that collapsed the header strip. */
+    flex-shrink:0;
     height:auto;
     aspect-ratio:var(--ar);
   }
-  /* one number, used by both halves of the viewer header below — the whole
-     point is that .tag and .vclose can never disagree about it */
-  :root{ --vhead:48px; }
+  /* THE viewer header: the photo code on the left, Close on the right,
+     reading as one white plate exactly as tall as the site header, with
+     both texts starting at the header's own padding-top so the code lands
+     where "House of Walk" was and Close lands where Dark was.
 
-  /* THE header strip (photo code on the left, Close on the right). Two
-     separate elements — .tag lives inside the frame, .vclose is a single
-     position:fixed button shared by every frame — so the only thing making
-     them read as one white plate is that both are exactly --vhead tall, at
-     top:0, in --paper. Everything below exists to guarantee that.
+     There is only ONE plate. .frame .tag is the full-width paper strip;
+     .vclose is a transparent button sitting on top of it. That's what
+     finally kills the step between them for good — two plates whose heights
+     are computed separately can always end up a pixel apart, whereas a
+     button with no background of its own has no bottom edge to disagree
+     about, at any device size or in any state.
 
-     flex-shrink:0 is the important one, and was the actual bug: .frame is a
-     column flex container with height:100%, so tag + photo compete for the
-     screen's height. A tall photo (375px wide × 9:16 ≈ 667px) plus the
-     header doesn't fit a short phone (iPhone SE is 667px tall), and since
-     .tag has overflow:hidden — which makes its automatic minimum size 0
-     instead of content-based — the flex algorithm happily crushed the whole
-     header down to ~3px to make room, while .vclose (not in this flex
-     container at all) stayed full height. That's the "collapsed title, tall
-     white Close box" symptom, and it's exactly why the header's height
-     looked like it depended on the photo: it did. Opting out of shrinking
-     makes the header's height a constant, and the photo simply runs past the
-     bottom of a short screen instead (filmrow's overflow:hidden clips it).
+     flex-shrink:0 is the other half of that guarantee, and was the original
+     bug: .frame is a column flex container with height:100%, so tag and
+     photo compete for the screen's height. A tall photo (375px wide × 9:16
+     ≈ 667px) plus the header doesn't fit a short phone (iPhone SE is 667px
+     tall), and since .tag has overflow:hidden — which makes its automatic
+     minimum size 0 rather than content-based — the flex algorithm crushed
+     the whole strip to ~3px to make room while .vclose, not being in that
+     flex container, stayed full height. Opting out of shrinking makes the
+     height a constant; the photo simply runs past the bottom of a short
+     screen instead (filmrow's overflow:hidden clips it).
 
-     line-height:var(--vhead) rather than flex centering: .vclose is a
-     <button>, and WebKit wraps a button's children in an anonymous block,
-     which historically makes align-items/justify-content inside a button do
-     nothing. Centering both by line-height instead uses no flex at all, so
-     the code text and Close land on the same baseline by construction on
-     every engine — no JS measurement, nothing to drift. */
+     Neither half uses flex to place its text: .vclose is a <button>, and
+     WebKit wraps a button's children in an anonymous block, which makes
+     align-items/justify-content inside a button a no-op. Ordinary top
+     padding works identically everywhere. */
   .frame .tag{
     height:var(--vhead);
     flex-shrink:0;
-    line-height:var(--vhead);
+    line-height:1.3;
     /* left inset matches the main header's own var(--pad), the same as
        "House of Walk" sits from the edge — so closing back out to the main
-       page doesn't jump the eye sideways. Right inset clears .vclose's plate
-       so a long code truncates with an ellipsis instead of sliding under it. */
-    padding:0 76px 0 var(--pad);
+       page doesn't jump the eye sideways. Right inset clears Close's text
+       so a long code truncates with an ellipsis instead of running under it. */
+    padding:var(--head-pt) 76px 0 var(--pad);
     text-overflow:ellipsis;
     margin-bottom:-1px; /* seam-hiding overlap into the photo below, see the
       viewer .filmrow notes elsewhere for why this is here */
   }
   /* the desktop drag-bar assumes a mouse; swipe + scroll-snap replaces it */
   .hscroll{display:none;}
-  /* the other half of the header plate — same --vhead height, same
-     line-height centering, same paper background as .frame .tag, so the two
-     abut seamlessly and read as one strip with Close sitting on top of it at
-     the right. No JS measurement or height sync for this tier at all
-     anymore (see layoutFrames). Right inset matches var(--pad), the same as
-     Dark/Light sits from the edge, so Close is exactly where Dark will be
-     once the viewer closes. */
+  /* transparent: the plate under Close is .frame .tag, which spans the full
+     width of the frame. Giving this button its own background is what used
+     to produce the step, so it deliberately has none — there is nothing here
+     but the word and a tap target. Same height and same top padding as the
+     tag purely so the tap target covers the strip and the text starts on the
+     tag's line. Right inset matches var(--pad), the same as Dark/Light sits
+     from the edge, so Close is where Dark will be once the viewer closes. */
   .vclose{
     height:var(--vhead);
-    line-height:var(--vhead);
+    line-height:1.3;
     display:block;
     text-align:right;
+    background:transparent;
     padding:0 var(--pad) 0 4px;
+  }
+  /* the top padding that puts Close on the tag's line lives on the span, not
+     on the button, and the span is stretched to fill the button. A <button>
+     wraps its children in an anonymous block and centres that block
+     vertically — that's the same engine behaviour that makes align-items
+     inside a button a no-op, and it silently swallowed padding-top on the
+     button itself, dropping Close ~10px below the code. A child that already
+     fills the content box leaves the centring nothing to do, so the padding
+     lands where it's written. */
+  .vclose span{
+    display:block;
+    height:100%;
+    box-sizing:border-box;
+    padding-top:var(--head-pt);
   }
   /* essay: title on one line, subheading strictly in the left column with
      the body text in the wider column beside it (same 1fr/3fr split as
@@ -1113,7 +1167,7 @@ a{color:inherit;}
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(450, t);
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.linearRampToValueAtTime(0.05, t + 0.004);
+      gain.gain.linearRampToValueAtTime(0.0525, t + 0.004); /* 0.05 + 5% */
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.042);
       osc.connect(filter).connect(gain).connect(ctx.destination);
       osc.start(t);
@@ -1201,6 +1255,19 @@ a{color:inherit;}
       + '</div>';
   });
   grid.innerHTML = gridHtml;
+
+  /* flips .ph to .loaded once its image has actually painted, which is what
+     gates the vignette (see .ph.loaded::after in CSS). The full-res .ph-full
+     is deliberately excluded — it fades in over the thumb that's already
+     there, so the plate is no longer "empty" by the time it arrives. */
+  function watchPhImages(root){
+    root.querySelectorAll('.ph.real img:not(.ph-full)').forEach(function(img){
+      var ph = img.parentNode;
+      if(img.complete && img.naturalWidth){ ph.classList.add('loaded'); return; }
+      img.addEventListener('load', function(){ ph.classList.add('loaded'); }, {once:true});
+    });
+  }
+  watchPhImages(grid);
 
   /* ---------- mobile (<=680px): 3-column grid, so card labels have far less
      room than the desktop --ui-size assumes. Compute one font-size, applied
@@ -1635,6 +1702,47 @@ a{color:inherit;}
     }
   });
 
+  /* a light haptic tap to go with the tick. navigator.vibrate is an Android
+     thing — iOS Safari doesn't implement it at all and there's no web API
+     that reaches the Taptic Engine, so on an iPhone this is simply a no-op
+     and the tick alone carries the feedback. Anyone who has asked the OS to
+     tone down motion gets neither. */
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function buzz(ms){
+    if(prefersReducedMotion.matches) return;
+    try{ if(navigator.vibrate) navigator.vibrate(ms || 5); }catch(e){}
+  }
+
+  /* a touch swipe never fires a wheel event, so the wheel-driven tick above
+     is silent on a phone. Drive it off 'scroll' there instead — but one tick
+     per scroll event would be a continuous rattle during a fling, so fire on
+     each STEP px of travel. That reads as a ratchet, roughly a tick per row
+     of cards, and it self-throttles at any scroll speed. */
+  var TICK_STEP = 64;
+  var lastTickScrollY = 0;
+  window.addEventListener('scroll', function(){
+    var y = window.scrollY;
+    /* the grid behind the viewer is scrolled programmatically while a photo
+       is open (syncGridScrollToOpenFrame), and About locks the body — none
+       of that is the reader's thumb, so it makes no sound. Re-baseline
+       rather than just bailing out, or the first genuine scroll afterwards
+       would inherit all that skipped travel and tick immediately. */
+    if(!mobileQuery.matches
+       || viewer.classList.contains('open')
+       || document.getElementById('aboutPage').classList.contains('open')){
+      lastTickScrollY = y;
+      return;
+    }
+    if(Math.abs(y - lastTickScrollY) < TICK_STEP) return;
+    lastTickScrollY = y;
+    /* silent at the very ends, same rule the wheel handler uses: the page
+       isn't actually travelling any more, so it shouldn't keep ticking */
+    var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    if(y <= 0.5 || y >= maxScroll - 0.5) return;
+    playTick();
+    buzz();
+  }, {passive:true});
+
   var filmrow = document.getElementById('filmrow');
   var vclose = document.getElementById('vclose');
   var hsTrack = document.getElementById('hsTrack');
@@ -1684,6 +1792,7 @@ a{color:inherit;}
       });
     });
 
+    watchPhImages(filmrow);
     filmrow.querySelectorAll('.ph-full').forEach(function(fullImg){
       if(fullImg.complete){ fullImg.classList.add('loaded'); }
       else { fullImg.addEventListener('load', function(){ fullImg.classList.add('loaded'); }); }
@@ -1753,13 +1862,15 @@ a{color:inherit;}
   }
 
   function layoutFrames(){
-    /* mobile: .frame .tag and vclose both get a FIXED height straight from
-       CSS now (see the mobile media query) — no JS measurement involved at
-       all, which is what makes it immune to the font-swap timing race that
-       used to make this header render shorter on a fresh, unscrolled page
-       load than after scrolling. Only tablet/iPad Pro/desktop still derive
+    /* mobile: both halves of the viewer header size themselves off --vhead,
+       which is the measured site-header height — refresh it before anything
+       reads it. No per-frame measurement is involved on that tier at all,
+       which is what makes it immune to the font-swap timing race that used
+       to make this header render shorter on a fresh, unscrolled page load
+       than after scrolling. Only tablet/iPad Pro/desktop still derive
        vclose's height from measuring .tag, since those tiers weren't
        reported to have the same timing problem. */
+    syncViewerHeadMetrics();
     var tagH = frameEls.length ? frameEls[0].querySelector('.tag').getBoundingClientRect().height : 0;
     if(mobileQuery.matches){
       vclose.style.height = '';
@@ -1782,11 +1893,15 @@ a{color:inherit;}
     var tagTextEl = frameEls.length ? frameEls[0].querySelector('.tag span') : null;
     var vcloseTextEl = vclose.querySelector('span');
     if(mobileQuery.matches){
-      /* not needed on mobile: both halves of the header centre their text
-         with the same line-height:var(--vhead) on the same fixed box height,
-         so they're on the same baseline by construction. Clear anything a
-         previous wider-viewport layout pass left behind. */
-      if(vcloseTextEl) vcloseTextEl.style.top = '0px';
+      /* not needed on mobile: both halves of the header start their text at
+         the same --head-pt inside boxes of the same --vhead height, so
+         they're on the same line by construction. Clear both properties a
+         previous wider-viewport pass may have set, not just top — a
+         leftover position:relative would offset the span all over again. */
+      if(vcloseTextEl){
+        vcloseTextEl.style.position = '';
+        vcloseTextEl.style.top = '';
+      }
     } else if(tagTextEl && vcloseTextEl){
       /* padding-top alone didn't converge in one measurement — a single
          corrected value, re-measured, still showed a residual gap, which
@@ -1910,9 +2025,29 @@ a{color:inherit;}
     layoutFrames();
     var target = filmrow.querySelector('[data-gi="'+gi+'"]');
     if(target){
-      var targetCenter = target.offsetLeft + target.offsetWidth/2;
+      /* THE thin white line some photos showed down their left edge on
+         mobile. offsetLeft/offsetWidth/clientWidth are all specified to
+         return ROUNDED integers, so on any device whose frame width isn't a
+         whole number of CSS pixels this landed up to half a pixel away from
+         the frame's true left edge — and since the error comes from
+         rounding index x (width + gap), it varies photo by photo, which is
+         why some opened clean and their neighbours didn't. What showed
+         through that sub-pixel crack was the 10px flex gap between frames,
+         painted in the viewer's near-white background.
+
+         getBoundingClientRect is fractional, so measuring the target's
+         centre against the container's centre and scrolling by the
+         difference is exact regardless of the widths involved. Snapping the
+         result to a whole device pixel then guarantees the frame's edge
+         lands on the physical pixel grid, so there's no crack left to show
+         through even at fractional device pixel ratios. */
+      var frRect = filmrow.getBoundingClientRect();
+      var tRect = target.getBoundingClientRect();
+      var delta = (tRect.left + tRect.width/2) - (frRect.left + frRect.width/2);
       var max = filmrow.scrollWidth - filmrow.clientWidth;
-      filmrow.scrollLeft = Math.min(max, Math.max(0, targetCenter - filmrow.clientWidth/2));
+      var next = Math.min(max, Math.max(0, filmrow.scrollLeft + delta));
+      var dpr = window.devicePixelRatio || 1;
+      filmrow.scrollLeft = Math.round(next * dpr) / dpr;
     }
     hLerp.sync();
     updateThumb();
@@ -1996,6 +2131,9 @@ a{color:inherit;}
   window.addEventListener('resize', function(){
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
+      updateTopbarCompact(); /* crossing the mobile breakpoint changes whether
+                                the header is allowed to shrink at all */
+      syncViewerHeadMetrics();
       if(built) layoutFrames();
       lockWordWidth();
       layoutFooter();
@@ -2010,6 +2148,16 @@ a{color:inherit;}
      which can re-cross a single threshold and shake back and forth. */
   var topbarEl = document.querySelector('.topbar');
   function updateTopbarCompact(){
+    /* mobile keeps the header at one fixed size — it's what the viewer's own
+       header is measured against, and a height that moves under your thumb
+       while you scroll isn't worth the few pixels it buys on a phone. The
+       class is left off entirely rather than merely neutralised in CSS, so
+       nothing downstream has to reason about a compact state that doesn't
+       apply. */
+    if(mobileQuery.matches){
+      topbarEl.classList.remove('compact');
+      return;
+    }
     var y = window.scrollY;
     var isCompact = topbarEl.classList.contains('compact');
     if(!isCompact && y > 24){ topbarEl.classList.add('compact'); }
@@ -2017,6 +2165,22 @@ a{color:inherit;}
   }
   window.addEventListener('scroll', updateTopbarCompact, {passive:true});
   updateTopbarCompact();
+
+  /* "exactly as tall as the site header" isn't something CSS can express
+     when the header's height comes from font metrics, so measure it once and
+     publish it as --vhead for the viewer header to use. Re-run it wherever
+     the header could have changed size: fonts settling, a resize, an
+     orientation change. The CSS fallback value covers the window before the
+     first measurement lands. */
+  function syncViewerHeadMetrics(){
+    if(!mobileQuery.matches){
+      document.documentElement.style.removeProperty('--vhead');
+      return;
+    }
+    var h = topbarEl.getBoundingClientRect().height;
+    if(h > 0) document.documentElement.style.setProperty('--vhead', h+'px');
+  }
+  syncViewerHeadMetrics();
 
   /* the embedded Spline Sans Mono / Impact fonts can finish decoding after this
      script already measured layout against fallback-font metrics; once real
@@ -2027,6 +2191,7 @@ a{color:inherit;}
     layoutFooter();
     alignTagline();
     sizeTagFont();
+    syncViewerHeadMetrics(); /* header height moves with the font metrics */
     if(built) layoutFrames();
   }
   if(document.fonts && document.fonts.ready){
