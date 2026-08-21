@@ -638,8 +638,11 @@ a{color:inherit;}
      header's height comes from font metrics. */
   :root{
     --head-pt:24px;
-    --head-pb:4px;
-    --vhead:59px;
+    /* both are overwritten by syncViewerHeadMetrics with exact measured
+       values; these are just close enough that nothing jumps visibly in the
+       frame before the first measurement lands */
+    --head-pb:11px;
+    --vhead:66px;
   }
   /* static on mobile — no shrink-on-scroll. The compact class is still
      toggled by JS for wider screens, so neutralise it here rather than
@@ -740,47 +743,77 @@ a{color:inherit;}
   .frame .tag{
     height:var(--vhead);
     flex-shrink:0;
-    line-height:1.3;
+    /* one line box exactly as tall as the strip centres the text in it, with
+       no flex involved — which matters because the other half of this header
+       is a <button>, see .vclose below. --vhead is measured so that this
+       centre lands on Dark's line in the site header. */
+    line-height:var(--vhead);
     /* left inset matches the main header's own var(--pad), the same as
        "House of Walk" sits from the edge — so closing back out to the main
-       page doesn't jump the eye sideways. Right inset clears Close's text
+       page doesn't jump the eye sideways. Right inset clears Close's plate
        so a long code truncates with an ellipsis instead of running under it. */
-    padding:var(--head-pt) 76px 0 var(--pad);
+    padding:0 76px 0 var(--pad);
     text-overflow:ellipsis;
     margin-bottom:-1px; /* seam-hiding overlap into the photo below, see the
       viewer .filmrow notes elsewhere for why this is here */
   }
   /* the desktop drag-bar assumes a mouse; swipe + scroll-snap replaces it */
   .hscroll{display:none;}
-  /* transparent: the plate under Close is .frame .tag, which spans the full
-     width of the frame. Giving this button its own background is what used
-     to produce the step, so it deliberately has none — there is nothing here
-     but the word and a tap target. Same height and same top padding as the
-     tag purely so the tap target covers the strip and the text starts on the
-     tag's line. Right inset matches var(--pad), the same as Dark/Light sits
-     from the edge, so Close is where Dark will be once the viewer closes. */
+  /* Close is an opaque plate again, sitting ON TOP of the tag (z-index:20 in
+     the base rule, above .filmrow), so the next photo's code slides in from
+     the right and out from underneath it instead of the two texts crossing
+     over each other mid-swipe.
+
+     Everything visible lives on the span, not the button: the button is left
+     transparent with no padding, and the span carries the plate, the padding
+     and the text. Two reasons. The plate has to reach the screen edge, so
+     the padding must be inside the painted box rather than around it. And
+     the plate is deliberately 2px SHORTER than --vhead — a shorter plate is
+     invisible because the full-height tag plate behind it is the same paper
+     colour, whereas a plate even a fraction taller shows as a step below the
+     tag's edge. Since the two are separate compositing layers (one fixed,
+     one inside a scrolling container) their edges can round independently,
+     so "never taller" is a guarantee where "exactly equal" is a hope.
+
+     line-height stays --vhead, not the span's own 2px-shorter height, so the
+     text centres against the full strip and lands on the tag's line — and
+     on Dark's line, which is what --vhead is measured from. */
   .vclose{
     height:var(--vhead);
-    line-height:1.3;
     display:block;
-    text-align:right;
     background:transparent;
-    padding:0 var(--pad) 0 4px;
+    padding:0;
   }
-  /* the top padding that puts Close on the tag's line lives on the span, not
-     on the button, and the span is stretched to fill the button. A <button>
-     wraps its children in an anonymous block and centres that block
-     vertically — that's the same engine behaviour that makes align-items
-     inside a button a no-op, and it silently swallowed padding-top on the
-     button itself, dropping Close ~10px below the code. A child that already
-     fills the content box leaves the centring nothing to do, so the padding
-     lands where it's written. */
   .vclose span{
     display:block;
+    /* fills the button exactly. Making the span itself 2px shorter would be
+       the obvious way to shorten the plate, but the button would then centre
+       it in the leftover space and push the text half a step down — the
+       plate is shortened by painting instead: the background is a flat
+       gradient sized to (100% - 2px), so the box still fills the button and
+       only the paint stops short. */
     height:100%;
     box-sizing:border-box;
-    padding-top:var(--head-pt);
+    line-height:var(--vhead);
+    background:linear-gradient(var(--paper),var(--paper)) top left/100% calc(100% - 2px) no-repeat;
+    text-align:right;
+    /* right inset matches var(--pad), the same as Dark/Light sits from the
+       edge, so Close is where Dark will be once the viewer closes */
+    padding:0 var(--pad) 0 4px;
   }
+  /* the button's own background is transparent here, so the inverted state
+     has to move to the span or it would be painted over by it. Only the
+     image changes — size, position and repeat carry over. */
+  .vclose:focus-visible{background:transparent;}
+  .vclose:focus-visible span{background-image:linear-gradient(var(--ink),var(--ink));}
+  /* Dark's own 2px of vertical padding put its text 2px below the wordmark
+     and the tagline, so the header's "first line" wasn't actually one line.
+     Since --vhead is measured from Dark's centre, that 2px propagated
+     straight into the viewer header. Drop it here and all five — House of
+     Walk, A personal archive, Dark, the photo code and Close — share a line.
+     The header's height is set by .word, which is taller than this button
+     either way, so nothing else moves. */
+  .topbar .theme-toggle{padding:0;}
   /* essay: title on one line, subheading strictly in the left column with
      the body text in the wider column beside it (same 1fr/3fr split as
      desktop — only the outer stacking order changes, not the essay's own
@@ -834,11 +867,21 @@ a{color:inherit;}
     margin-top:0;
     overflow-y:visible;
     padding-right:0;
+    /* the essay's own columns are the photo grid's columns here, not the
+       1fr/3fr split the wider tiers use: three equal tracks with the same
+       8px gutter as .grid, so the body text starts exactly on the second
+       card column — the same left edge as "A personal archive" in the
+       header, which alignTagline already pins to that column. The
+       subheading keeps the first column to itself. */
+    grid-template-columns:repeat(3,1fr);
+    column-gap:8px;
     /* the space between one subheading+text block and the next should read
        as clearly bigger than the space between paragraphs inside a block
        (that's .essay-body p's own 1.3em) */
     row-gap:3.5em;
   }
+  .about-essay .essay-sub{grid-column:1;}
+  .about-essay .essay-body{grid-column:2 / 4;}
 
   /* footer: a real 3-column grid matching the photo grid, so long lines
      wrap inside their own column instead of overflowing into the next one
@@ -863,6 +906,14 @@ a{color:inherit;}
     align-self:start;
     margin-top:var(--pad);
   }
+}
+
+/* companion to the .vclose rules in the mobile block: the plate lives on the
+   span there, so the hover inversion has to as well. Separate block rather
+   than nested, so it stays readable as one condition. */
+@media (hover:hover) and (max-width:680px){
+  .vclose:hover{background:transparent;}
+  .vclose:hover span{background-image:linear-gradient(var(--ink),var(--ink));}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -1706,11 +1757,19 @@ a{color:inherit;}
      thing — iOS Safari doesn't implement it at all and there's no web API
      that reaches the Taptic Engine, so on an iPhone this is simply a no-op
      and the tick alone carries the feedback. Anyone who has asked the OS to
-     tone down motion gets neither. */
+     tone down motion gets neither.
+
+     12ms rather than the 5ms this started at: most Android haptics are LRA
+     motors that need a few milliseconds just to spin up, so anything under
+     about 10ms is either inaudible or never actually rendered — "no
+     vibration at all" rather than "a subtle one". Chrome also gates
+     vibrate() behind sticky user activation, so it stays silent until the
+     reader has tapped the page at least once; scrolling alone doesn't grant
+     it, which is why the very first swipe of a session can be quiet. */
   var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   function buzz(ms){
     if(prefersReducedMotion.matches) return;
-    try{ if(navigator.vibrate) navigator.vibrate(ms || 5); }catch(e){}
+    try{ if(navigator.vibrate) navigator.vibrate(ms || 12); }catch(e){}
   }
 
   /* a touch swipe never fires a wheel event, so the wheel-driven tick above
@@ -2128,9 +2187,25 @@ a{color:inherit;}
   });
 
   var resizeTimer;
+  var lastResizeWidth = window.innerWidth;
+  var widthChangedSinceLastPass = false;
   window.addEventListener('resize', function(){
+    if(window.innerWidth !== lastResizeWidth){
+      lastResizeWidth = window.innerWidth;
+      widthChangedSinceLastPass = true;
+    }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
+      var widthChanged = widthChangedSinceLastPass;
+      widthChangedSinceLastPass = false;
+      /* on a phone the address bar slides in and out as you scroll, and every
+         one of those fires a resize with the SAME width and a different
+         height. Re-running the measurement passes then re-derives identical
+         numbers with fresh sub-pixel rounding and writes them back as inline
+         widths and offsets — which is visible as the header twitching under
+         your thumb while you scroll. Nothing below depends on the viewport's
+         height, so a height-only resize has nothing to recompute. */
+      if(!widthChanged && mobileQuery.matches) return;
       updateTopbarCompact(); /* crossing the mobile breakpoint changes whether
                                 the header is allowed to shrink at all */
       syncViewerHeadMetrics();
@@ -2166,20 +2241,52 @@ a{color:inherit;}
   window.addEventListener('scroll', updateTopbarCompact, {passive:true});
   updateTopbarCompact();
 
-  /* "exactly as tall as the site header" isn't something CSS can express
-     when the header's height comes from font metrics, so measure it once and
-     publish it as --vhead for the viewer header to use. Re-run it wherever
-     the header could have changed size: fonts settling, a resize, an
-     orientation change. The CSS fallback value covers the window before the
-     first measurement lands. */
+  /* Close has to land exactly where Dark is, and the photo code beside it on
+     the same line. Both of those are centred in a strip of --vhead, so
+     --vhead has to be twice the distance from the top of the header down to
+     the centre of Dark's text — then the header's own first line sits dead
+     centre in its own height too, and the viewer header is that same box.
+     None of it is expressible in CSS, since it all comes from font metrics.
+
+     The header is grown downwards to reach that height: --head-pb absorbs
+     the difference, which is safe to iterate because padding-bottom moves
+     the header's bottom edge without moving Dark (align-items:flex-start
+     pins it to the top). Running this twice is therefore a no-op, not a
+     runaway. The CSS fallbacks cover the window before the first
+     measurement lands. */
+  var themeToggleEl = document.getElementById('themeToggle');
   function syncViewerHeadMetrics(){
+    var root = document.documentElement;
     if(!mobileQuery.matches){
-      document.documentElement.style.removeProperty('--vhead');
+      root.style.removeProperty('--vhead');
+      root.style.removeProperty('--head-pb');
       return;
     }
-    var h = topbarEl.getBoundingClientRect().height;
-    if(h > 0) document.documentElement.style.setProperty('--vhead', h+'px');
+    if(!themeToggleEl.firstChild) return;
+    /* a Range over the text gives the glyph box; its centre is the same as
+       the line box's centre (half-leading is symmetric), and unlike the
+       button's border box it isn't offset by the button's own padding. */
+    var rng = document.createRange();
+    rng.selectNodeContents(themeToggleEl);
+    var text = rng.getBoundingClientRect();
+    if(!text.height) return;
+    var tbRect = topbarEl.getBoundingClientRect();
+    var target = ((text.top + text.height/2) - tbRect.top) * 2;
+    if(!(target > 0)) return;
+    var padBottom = parseFloat(getComputedStyle(topbarEl).paddingBottom) || 0;
+    var next = padBottom + (target - tbRect.height);
+    /* a sanity rail, not a tuning knob: if a measurement ever comes back
+       nonsense the header keeps a sane shape instead of collapsing or
+       ballooning */
+    next = Math.max(0, Math.min(48, next));
+    root.style.setProperty('--head-pb', next+'px');
+    root.style.setProperty('--vhead', target+'px');
   }
+  /* twice on purpose: the first pass measures a header that still has the
+     CSS fallback padding, so the padding it derives lands a hundredth of a
+     pixel out. The second pass measures the corrected header and converges.
+     Idempotent after that — every later call is a no-op. */
+  syncViewerHeadMetrics();
   syncViewerHeadMetrics();
 
   /* the embedded Spline Sans Mono / Impact fonts can finish decoding after this
