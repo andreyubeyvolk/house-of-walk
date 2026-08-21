@@ -571,7 +571,18 @@ a{color:inherit;}
   grid-template-columns:repeat(10,1fr);
   gap:14px;
   padding:0 var(--pad) 40px;
+  /* THE reason the essay's columns didn't line up with the photo grid's on a
+     tablet. Where this element scrolls, a classic scrollbar takes ~15px out
+     of its content box — and since its columns are 1fr, all of them get
+     narrower, so every column but the first drifts left of the grid column
+     it is supposed to sit on (3px per column at five columns, 3.75 at four).
+     Hiding the scrollbar puts its content width back on exactly the page's
+     own, which is what the header and the grid were measured against. Costs
+     nothing on the devices this tier is for: touch scrollbars are overlays
+     with no width to begin with, and .filmrow already does the same. */
+  scrollbar-width:none;
 }
+.about-inner::-webkit-scrollbar{display:none;}
 /* grid-row:1 on all three is load-bearing, not decorative: with only
    grid-column set, CSS Grid's sparse auto-placement decides each item's row
    by walking the grid in DOM order and never moving its cursor backward
@@ -617,22 +628,31 @@ a{color:inherit;}
 .essay-body p{margin:0 0 1.3em; line-height:1.6;}
 .essay-body p:last-child{margin-bottom:0;}
 
-/* ---------- tablet ----------
-   Neither the mobile single-column stack nor the desktop side-by-side
-   split reads well at these in-between widths, so the essay page gets its
-   own layout here: title, then subheadings+text, then the photo full-width
-   at the bottom — everything as ONE outer grid so the label lines up with
-   the essay's own columns. .about-essay keeps its normal 1fr/3fr sub:body
-   split unchanged; only how much of the OUTER row it's given differs
-   between this tier and the iPad Pro one below (3 of 4 outer columns here,
-   4 of 5 there) — the ratio inside it stays identical either way. Bounds
-   picked empirically: the photo grid below (repeat(auto-fill,minmax(146px,1fr)))
-   itself flips from 4 to 5 columns right around 860px — using that same
-   signal here keeps the essay's column count in step with what the grid is
-   already visually doing at that width. */
-@media (min-width:681px) and (max-width:859px){
+/* ---------- tablet + iPad ----------
+   Neither the mobile single-column stack nor the desktop side-by-side split
+   reads well at these in-between widths, so the essay page gets its own
+   layout: title, then subheadings+text, then the photo full-width at the
+   bottom — everything as ONE outer grid, with the label on column 1 beside
+   "House of Walk", the subheading on column 2 beside "A personal archive",
+   and the body text from column 3 out to the edge.
+
+   How many columns that is comes from JS (syncEssayColumns), measured off
+   the photo grid's own first row, NOT from a breakpoint. The grid sizes
+   itself with auto-fill, so its column count depends on the width actually
+   available — which includes whether the browser is spending 10-15px on a
+   scrollbar. A media query cannot see that, and the two disagreed for a
+   band of widths either side of the flip: at exactly 860px with a desktop
+   scrollbar the grid was still on four columns while the essay had already
+   moved to five, putting the body text 80px left of the column it was
+   supposed to sit on. Measuring the real thing removes the guess entirely.
+   The values below are only the fallback for the frame before JS runs. */
+@media (min-width:681px) and (max-width:1050px){
+  :root{
+    --essay-cols:4;
+    --essay-inner-cols:3;
+  }
   .about-inner{
-    grid-template-columns:repeat(4,1fr);
+    grid-template-columns:repeat(var(--essay-cols),1fr);
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
     /* small visual gap from the header, distinct from the 6px technical
@@ -648,70 +668,37 @@ a{color:inherit;}
       hard top edge — the label's row-mate here is essay text, not a photo */
   }
   .about-essay{
-    grid-column:2 / 5;
+    grid-column:2 / -1;
     grid-row:1;
     height:auto;
     margin-top:0;
     overflow-y:visible;
     padding-right:0;
-    /* essay spans 3 of the outer grid's columns here (2,3,4). Desktop's own
-       1fr/3fr sub:body split divides THAT span 25%/75%, which lands body
-       text a quarter of the way into column 3 rather than starting exactly
-       at its left edge — a visible mismatch against the photo grid's real
-       column 3. 1fr/2fr splits the 3-column span exactly in half-and-half
-       by column (1 column : 2 columns), so body text starts flush with the
-       outer grid's column 3. */
-    grid-template-columns:1fr 2fr;
+    /* the essay's own columns ARE the outer grid's columns, not a ratio that
+       approximates them: equal tracks with the same 14px gutter subdivide
+       the outer columns this spans exactly, because equal columns with equal
+       gutters nest perfectly. The 1fr/3fr split the desktop uses is the
+       right proportion but the wrong arithmetic here — it divides the whole
+       span including its gutters, which lands a few pixels off the real
+       column edge. */
+    grid-template-columns:repeat(var(--essay-inner-cols),1fr);
+    column-gap:14px;
   }
+  .about-essay .essay-sub{grid-column:1;}
+  .about-essay .essay-body{grid-column:2 / -1;}
   .about-photo{
-    grid-column:1 / 5;
+    grid-column:1 / -1;
     grid-row:2;
     margin-top:2.4em;
     /* overflow:hidden here (inherited from the desktop rule) clamps this
        item's automatic minimum size to 0 for grid sizing purposes too — same
        underlying rule as the flex-shrink bug fixed for mobile. Without
-       visible content-based sizing, an auto grid row can end up sized only
-       a few px tall instead of to the photo's real (aspect-ratio-driven)
-       height, which is exactly what was happening — the photo was there,
-       just squeezed into ~0 height. Not needed here anyway since object-fit
-       isn't cropping anything once the image sizes by its own aspect-ratio. */
+       content-based sizing, an auto grid row can end up a few px tall
+       instead of the photo's real aspect-ratio-driven height, which is
+       exactly what was happening — the photo was there, just squeezed into
+       ~0 height. Not needed here anyway since object-fit isn't cropping
+       anything once the image sizes by its own aspect-ratio. */
     overflow:visible;
-  }
-  .about-photo img{height:auto; aspect-ratio:1012/1800;}
-}
-
-/* ---------- ipad pro (portrait) ----------
-   Same idea as the tablet tier just above, but the photo grid has already
-   flipped to 5 columns by this width, so the essay follows: subheading gets
-   its own column instead of sharing the label's, text spans the remaining
-   three. Upper bound (1050px) sits just under where the grid moves on to 6
-   columns (~1090px) — past that it's wide enough for the original desktop
-   side-by-side essay layout to work fine on its own. */
-@media (min-width:860px) and (max-width:1050px){
-  .about-inner{
-    grid-template-columns:repeat(5,1fr);
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    padding-top:20px;
-  }
-  .about-label{
-    grid-column:1;
-    grid-row:1;
-    margin-top:0;
-  }
-  .about-essay{
-    grid-column:2 / 6;
-    grid-row:1;
-    height:auto;
-    margin-top:0;
-    overflow-y:visible;
-    padding-right:0;
-  }
-  .about-photo{
-    grid-column:1 / 6;
-    grid-row:2;
-    margin-top:2.4em;
-    overflow:visible; /* see the tablet tier above for why */
   }
   .about-photo img{height:auto; aspect-ratio:1012/1800;}
 }
@@ -1754,6 +1741,41 @@ a{color:inherit;}
     alignToColumn(document.querySelector('.tagline'), 1);
   }
 
+  /* ---------- essay columns = the photo grid's columns ----------
+     The grid sizes itself with auto-fill, so how many columns it ends up
+     with depends on the width actually available — which includes whether
+     the browser is spending 10-15px of it on a scrollbar. A media query
+     can't see that, so a breakpoint guessing the count disagreed with the
+     real thing for a band of widths either side of each flip: at exactly
+     860px with a desktop scrollbar the grid was still on four columns while
+     the essay's CSS had already moved to five, which put the body text 80px
+     left of the column it was meant to sit on.
+
+     Count the first row instead. Cells in one row share an offsetTop
+     (.grid is align-items:start), so the run of equal tops IS the column
+     count, straight from the element that decides it. */
+  function syncEssayColumns(){
+    var root = document.documentElement;
+    if(!tabletViewerQuery.matches){
+      /* mobile fixes its columns in CSS and desktop uses a different essay
+         layout entirely — neither wants these */
+      root.style.removeProperty('--essay-cols');
+      root.style.removeProperty('--essay-inner-cols');
+      return;
+    }
+    var cells = grid.querySelectorAll('.cell');
+    if(cells.length < 2) return;
+    var firstTop = cells[0].offsetTop;
+    var n = 0;
+    for(var i=0;i<cells.length;i++){
+      if(cells[i].offsetTop !== firstTop) break;
+      n++;
+    }
+    if(n < 2) return; /* mid-relayout garbage, leave the last good value */
+    root.style.setProperty('--essay-cols', n);
+    root.style.setProperty('--essay-inner-cols', n-1);
+  }
+
   /* ---------- footer columns ----------
      Desktop: a flex row, width-constrained and column-aligned via the two
      helpers above. Mobile: a real 3-column CSS grid (see the media query)
@@ -1838,6 +1860,7 @@ a{color:inherit;}
   /* must run after theme-toggle's text is set: its content width affects the
      flex row's space-between distribution, which the tagline offset depends on */
   alignTagline();
+  syncEssayColumns();
   var footerCol1 = document.getElementById('footerCol1');
   var footerCol2 = document.getElementById('footerCol2');
   layoutFooter();
@@ -1920,6 +1943,10 @@ a{color:inherit;}
 
     function openAbout(){
       window.scrollTo(0, 0);
+      /* the essay's columns are the grid's columns, so re-read them at the
+         moment they're about to be looked at — cheap, and it covers anything
+         that changed the grid since the last layout pass */
+      syncEssayColumns();
       var topbarEl = document.querySelector('.topbar');
       /* window.scrollTo() updates scrollY synchronously, but the 'scroll'
          event that updateTopbarCompact() listens for to drop the .compact
@@ -2570,6 +2597,7 @@ a{color:inherit;}
       lockWordWidth();
       layoutFooter();
       alignTagline();
+      syncEssayColumns();
       sizeTagFont();
     }, 120);
   });
@@ -2654,6 +2682,7 @@ a{color:inherit;}
     lockWordWidth();
     layoutFooter();
     alignTagline();
+    syncEssayColumns();
     sizeTagFont();
     syncViewerHeadMetrics(); /* header height moves with the font metrics */
     if(built) layoutFrames();
