@@ -49,10 +49,15 @@
      --ink (black in light mode) because it sits over photo content, which
      is often dark at the bottom — a black thumb disappeared against it. */
   --hs-color:#4A4A4A;
+  /* the viewer's loading tint (see .ph-tint) — white lifts the loading
+     state up off a light page; the same lift on a dark page is a light
+     grey instead, or it would read as a bright flash rather than a wash */
+  --ph-tint:#ffffff;
 }
 :root[data-theme="dark"]{
   --paper:#0D0D0D;
   --ink:#F5F5F5;
+  --ph-tint:#383838;
 }
 
 *{box-sizing:border-box;}
@@ -369,24 +374,46 @@ a{color:inherit;}
 /* the viewer's cached grid thumbnail, stretched up to full-photo size while
    the real file downloads, used to just look like a soft, low-quality
    version of the photo — reading as "this is the final image, and it's
-   bad" rather than "this is loading". An actual blur plus the site's own
-   film-grain texture (same #grain filter the grid's cards use) reads as a
-   deliberate loading state instead: closer to a scan of a contact print
-   than a compression artifact. scale(1.08) keeps the blurred edge from
-   ever showing inside the frame — .ph's own overflow:hidden clips it.
-   Permanent rather than toggled: once .ph-full covers it at opacity:1,
-   what's happening underneath no longer matters. */
-.ph-thumb{filter:blur(18px) saturate(.85); transform:scale(1.08);}
-.ph-full{opacity:0;transition:opacity .35s ease;}
+   bad" rather than "this is loading". A heavy blur plus a pass of thin
+   horizontal slats reads as a deliberate loading state instead — light
+   through blinds, not a compression artifact. scale(1.05) keeps the
+   blurred edge from ever showing inside the frame — .ph's own
+   overflow:hidden clips it. Permanent rather than toggled: once .ph-full
+   covers it at opacity:1, what's happening underneath no longer matters.
+   Tuned on a live parameter bench rather than guessed — see
+   loading-effect-tuner.html in the project root. */
+.ph-thumb{filter:blur(18px); transform:scale(1.05);}
+.ph-full{opacity:0;transition:opacity .45s ease;}
 .ph-full.loaded{opacity:1;}
-/* sits on top of both images; fades out together with the blur once the
-   real photo is in, on the same .35s as .ph-full's own fade so the two
-   read as one transition rather than two. Stronger than the grid's resting
-   .15 (and much stronger than its own .02 loading-placeholder grain) —
-   this one has one job, being obviously part of a loading state, not
-   ambient texture on a finished photo. */
-.grain.load{opacity:.32; transition:opacity .35s ease;}
-.ph-full.loaded ~ .grain.load{opacity:0;}
+/* the slats: a repeating gradient rather than actual stripe elements, blurred
+   just enough to soften their edges without losing the banding. inset:-10px
+   (bigger than the frame) so that softened edge falls outside .ph's
+   overflow:hidden instead of showing as a partial line at the very top/
+   bottom of the photo. */
+.ph-blinds{
+  position:absolute; inset:-10px;
+  background-image:repeating-linear-gradient(to bottom, #0d0d0d 0, #0d0d0d 2px, transparent 2px, transparent 10px);
+  filter:blur(3px);
+  opacity:.35;
+  transition:opacity .45s ease;
+  pointer-events:none;
+}
+/* a flat, lifted wash over the whole loading state — the blur alone still
+   read as "photo, just soft"; this pulls it further from looking like the
+   real photo's own colour and tone. --ph-tint flips with the theme (white
+   on paper, a mid grey on ink) since a literal white wash on a dark page
+   would read as a bright flash rather than the same lift. */
+.ph-tint{
+  position:absolute; inset:0;
+  background:var(--ph-tint);
+  opacity:.5;
+  transition:opacity .45s ease;
+  pointer-events:none;
+}
+/* both sit on top of .ph-full in the DOM, so this is what fades them out
+   together with it once the real photo has loaded */
+.ph-full.loaded ~ .ph-blinds,
+.ph-full.loaded ~ .ph-tint{opacity:0;}
 .grid .ph{opacity:.9;transition:opacity .2s ease;}
 :root[data-theme="dark"] .grid .ph{opacity:.85;}
 .grid .grain.noise{opacity:.02;transition:opacity .2s ease;}
@@ -1433,13 +1460,14 @@ a{color:inherit;}
       return '<div class="'+cls+'"><img data-src="'+f.thumb+'" alt="">'+grain+'</div>';
     }
     /* viewer: the thumb is already cached from the grid, so it paints
-       instantly, blurred and grained (see .ph-thumb/.grain.load in CSS) so
-       it reads as a loading state rather than the photo's actual quality;
-       the full-res image fades in over it, blur/grain and all, once it has
-       actually loaded. */
+       instantly, blurred with a pass of blinds and a tint over it (see
+       .ph-thumb/.ph-blinds/.ph-tint in CSS) so it reads as a loading state
+       rather than the photo's actual quality; the full-res image fades in
+       over all of it once it has actually loaded. */
     var img = '<img class="ph-thumb" src="'+f.thumb+'" alt="">'
       + '<img class="ph-full" src="'+f.img+'" loading="lazy" alt="">'
-      + '<i class="grain load"></i>';
+      + '<i class="ph-blinds"></i>'
+      + '<i class="ph-tint"></i>';
     return '<div class="'+cls+'">'+img+'</div>';
   }
 
