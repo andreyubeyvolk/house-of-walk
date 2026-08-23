@@ -1465,7 +1465,12 @@ a{color:inherit;}
        rather than the photo's actual quality; the full-res image fades in
        over all of it once it has actually loaded. */
     var img = '<img class="ph-thumb" src="'+f.thumb+'" alt="">'
-      + '<img class="ph-full" src="'+f.img+'" loading="lazy" alt="">'
+      /* fetchpriority defaults every frame to low — openViewer promotes
+         whichever one was actually tapped to high + eager, so that photo's
+         bytes win the connection over its neighbours instead of all 193
+         competing on equal footing the moment native lazy-loading decides
+         each is worth fetching. */
+      + '<img class="ph-full" src="'+f.img+'" loading="lazy" fetchpriority="low" alt="">'
       + '<i class="ph-blinds"></i>'
       + '<i class="ph-tint"></i>';
     return '<div class="'+cls+'">'+img+'</div>';
@@ -2816,6 +2821,19 @@ a{color:inherit;}
     layoutFrames();
     var target = filmrow.querySelector('[data-gi="'+gi+'"]');
     if(target){
+      /* the tapped photo's own full-resolution file should win the
+         connection over its neighbours, not queue up behind whichever ones
+         native lazy-loading happens to notice first — every frame starts at
+         fetchpriority="low" (see phHtml), this is what promotes the one
+         actually being looked at. loading="eager" matters as much as the
+         priority hint: "lazy" makes the fetch wait for the browser's own
+         intersection check, which runs on a later frame than this click
+         handler, not "immediately, this line". */
+      var targetImg = target.querySelector('.ph-full');
+      if(targetImg && !targetImg.complete){
+        targetImg.loading = 'eager';
+        targetImg.fetchPriority = 'high';
+      }
       /* THE thin white line some photos showed down their left edge on
          mobile. offsetLeft/offsetWidth/clientWidth are all specified to
          return ROUNDED integers, so on any device whose frame width isn't a
