@@ -1679,9 +1679,82 @@ a{color:inherit;}
       var top = window.pageYOffset || document.documentElement.scrollTop || 0;
       loadDownTo(top + (window.innerHeight || 800) * 2.5);
     }
+    /* ---------- opportunistic full-resolution prefetch ----------
+       Opening a photo has always started that specific full-resolution
+       fetch from zero at the moment you tap it — that's the ~700ms
+       blur-to-sharp gap between the cached grid thumbnail showing instantly
+       and the real image fading in over it. This warms the ones actually
+       on screen right now, in the background, at the lowest priority the
+       browser offers, so a photo you've been looking at is usually already
+       in the HTTP cache by the time you open it.
+
+       Deliberately narrow: only the current viewport, no runway ahead like
+       the thumbnail loader gets — a full photo is ~30x the weight of its
+       thumbnail (roughly 650KB vs 18KB), so the same generous window here
+       would mean silently pulling most of the archive's real weight for
+       photos scrolled past and never opened, which is exactly the cost this
+       whole loading scheme exists to avoid. This is a "probably already
+       warm", not a "definitely ready" — a photo opened within a moment of
+       scrolling to it can still show the same brief blur it always did. */
+    function initFullPrefetch(){
+      var conn = navigator.connection || navigator.webkitConnection || navigator.mozConnection;
+      if(conn && (conn.saveData || /2g/.test(conn.effectiveType || ''))) return;
+
+      var prefetched = {};
+      var queue = [];
+      var inFlight = 0, MAX_PARALLEL = 2;
+      function pump(){
+        while(inFlight < MAX_PARALLEL && queue.length){
+          var src = queue.shift();
+          inFlight++;
+          var img = new Image();
+          try{ img.fetchPriority = 'low'; }catch(e){}
+          var done = function(){ inFlight--; pump(); };
+          img.onload = done; img.onerror = done;
+          img.src = src;
+        }
+      }
+      /* requestIdleCallback's own {timeout} option is supposed to be this
+         exact guarantee — run anyway once the timeout elapses, even without
+         genuine idle time — but that guarantee turned out not to be
+         trustworthy: a background/non-compositing tab can leave a callback
+         registered with a 2000ms timeout waiting far longer than 2000ms,
+         since idle detection and its fallback timer both appear to be tied
+         to the same rendering-adjacent scheduling that a hidden tab
+         suspends. Racing it against a plain setTimeout — whichever fires
+         first wins, and the loser is a no-op via `done` — keeps the "defer
+         to genuine idle time when it's available" behaviour while putting a
+         hard, unconditional ceiling on how long it can possibly wait. */
+      function idle(fn){
+        var done = false;
+        function run(){ if(done) return; done = true; fn(); }
+        if(window.requestIdleCallback) requestIdleCallback(run, {timeout:600});
+        setTimeout(run, 600);
+      }
+      function scan(){
+        var top = window.pageYOffset || document.documentElement.scrollTop || 0;
+        var bottom = top + (window.innerHeight || 800);
+        var queuedAny = false;
+        cells.forEach(function(c){
+          var t = c.offsetTop, b = t + c.offsetHeight;
+          if(b < top || t > bottom) return; /* not currently on screen */
+          var gi = +c.dataset.gi;
+          if(prefetched[gi]) return;
+          prefetched[gi] = true;
+          var f = ARCHIVE[gi];
+          if(f && f.img){ queue.push(f.img); queuedAny = true; }
+        });
+        if(queuedAny) idle(pump);
+      }
+      idle(scan);
+      window.addEventListener('scroll', function(){ idle(scan); }, {passive:true});
+      window.addEventListener('resize', function(){ idle(scan); });
+    }
+
     function watchRest(){
       revealed = true;
       loadForScroll();
+      initFullPrefetch();
       window.addEventListener('scroll', loadForScroll, {passive:true});
       window.addEventListener('resize', loadForScroll);
     }
