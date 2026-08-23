@@ -1792,6 +1792,16 @@ a{color:inherit;}
      Each walk carries its own date, so where it lands on the page never
      depends on where it happens to sit in this list. */
   var MONTH_NUM = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  var MONTH_NAME = {JAN:'January',FEB:'February',MAR:'March',APR:'April',MAY:'May',JUN:'June',JUL:'July',AUG:'August',SEP:'September',OCT:'October',NOV:'November',DEC:'December'};
+  /* human-readable place per trip code, for alt text (see ARCHIVE below) —
+     not used anywhere else, so it's kept separate from WALKS itself rather
+     than adding a `place` field there that most entries would just repeat
+     for one already-implied city. */
+  var PLACE_BY_CODE = {
+    DPS:'Bali, Indonesia', BKK:'Bangkok, Thailand', BEG:'Belgrade, Serbia',
+    LED:'Saint Petersburg, Russia', DXB:'Dubai, UAE', PAR:'Paris, France',
+    MOW:'Moscow, Russia', AYT:'Antalya, Turkey', KAS:'Kaş, Turkey'
+  };
   function walkSortKey(w){
     var m = /^([A-Z]{3})(\d{2})$/.exec(w.date);
     return m ? (2000 + +m[2])*100 + MONTH_NUM[m[1]] : 0;
@@ -1799,6 +1809,18 @@ a{color:inherit;}
   WALKS.sort(function(a,b){ return walkSortKey(b) - walkSortKey(a); });
 
   function pad(n){ n=''+n; return n.length<4 ? ('0000'+n).slice(-4) : n; }
+
+  /* alt text for search engines and screen readers — every photo on the
+     site used to render with alt="", which is invisible to Google Images
+     and to anyone using a screen reader. Built from the trip's place/date
+     rather than anything photo-specific, since there's no per-photo
+     caption anywhere in the data to draw from. */
+  function altFor(w, pi){
+    var place = PLACE_BY_CODE[w.code] || w.code;
+    var dm = /^([A-Z]{3})(\d{2})$/.exec(w.date);
+    var when = dm ? (MONTH_NAME[dm[1]] + ' 20' + dm[2]) : w.date;
+    return place + ', ' + when + ' — photo ' + (pi+1) + ' of ' + w.photos.length;
+  }
 
   var ARCHIVE = [];
   WALKS.forEach(function(w,wi){
@@ -1814,7 +1836,8 @@ a{color:inherit;}
         land: ar > LAND_THRESHOLD,
         img: isReal ? entry.img : null,
         thumb: isReal ? (entry.thumb || entry.img) : null,
-        code:w.code+'_'+w.date+'_'+pad(pi+1)
+        code:w.code+'_'+w.date+'_'+pad(pi+1),
+        alt: isReal ? altFor(w, pi) : ''
       });
     });
   });
@@ -1835,20 +1858,20 @@ a{color:inherit;}
          lifts", which is what left the reveal landing on empty plates: the
          preloader was warming its own copies while the grid's own images
          hadn't been asked for at all. */
-      return '<div class="'+cls+'"><img data-src="'+f.thumb+'" alt="">'+grain+'</div>';
+      return '<div class="'+cls+'"><img data-src="'+f.thumb+'" alt="'+f.alt+'">'+grain+'</div>';
     }
     /* viewer: the thumb is already cached from the grid, so it paints
        instantly, blurred with a pass of blinds and a tint over it (see
        .ph-thumb/.ph-blinds/.ph-tint in CSS) so it reads as a loading state
        rather than the photo's actual quality; the full-res image fades in
        over all of it once it has actually loaded. */
-    var img = '<img class="ph-thumb" src="'+f.thumb+'" alt="">'
+    var img = '<img class="ph-thumb" src="'+f.thumb+'" alt="'+f.alt+'">'
       /* fetchpriority defaults every frame to low — openViewer promotes
          whichever one was actually tapped to high + eager, so that photo's
          bytes win the connection over its neighbours instead of all 193
          competing on equal footing the moment native lazy-loading decides
          each is worth fetching. */
-      + '<img class="ph-full" src="'+f.img+'" loading="lazy" fetchpriority="low" alt="">'
+      + '<img class="ph-full" src="'+f.img+'" loading="lazy" fetchpriority="low" alt="'+f.alt+'">'
       + '<i class="ph-blinds"></i>'
       + '<i class="ph-tint"></i>'
       + '<i class="ph-grain"></i>';
