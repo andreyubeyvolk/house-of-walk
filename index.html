@@ -1683,35 +1683,48 @@ a{color:inherit;}
        Opening a photo has always started that specific full-resolution
        fetch from zero at the moment you tap it — that's the ~700ms
        blur-to-sharp gap between the cached grid thumbnail showing instantly
-       and the real image fading in over it. This warms the ones actually
-       on screen right now, in the background, at the lowest priority the
-       browser offers, so a photo you've been looking at is usually already
-       in the HTTP cache by the time you open it.
+       and the real image fading in over it. This warms photos on approach
+       WHILE SCROLLING THE MAIN PAGE — the same runway the thumbnail loader
+       gets (2.5 screens ahead), not just whatever's on screen at the exact
+       instant a scan happens — so a photo is usually already in the HTTP
+       cache well before you actually reach and tap it.
 
-       Deliberately narrow: only the current viewport, no runway ahead like
-       the thumbnail loader gets — a full photo is ~30x the weight of its
-       thumbnail (roughly 650KB vs 18KB), so the same generous window here
-       would mean silently pulling most of the archive's real weight for
-       photos scrolled past and never opened, which is exactly the cost this
-       whole loading scheme exists to avoid. This is a "probably already
-       warm", not a "definitely ready" — a photo opened within a moment of
-       scrolling to it can still show the same brief blur it always did. */
+       An earlier version used the strictly-visible viewport with no runway
+       at all, on the reasoning that a full photo is ~30x its thumbnail's
+       weight (~650KB vs ~18KB) and a generous window would pull too much of
+       the archive for photos scrolled past and never opened. That reasoning
+       had a real bug in it: scrolling through the ENTIRE page eventually
+       shows every photo either way, so the window's size doesn't change how
+       much ends up fetched over a full read-through — only how much LEAD
+       TIME each photo gets before you might tap it. A tight window gives it
+       almost none, which is exactly the "scrolled to it and opened it
+       immediately, still blurry" this was supposed to fix. The actual
+       safety net is elsewhere: fetchPriority:'low' plus a small MAX_PARALLEL
+       so this never competes with anything the reader is actually waiting
+       on, and the connection guard below for links too slow to spend on
+       anything speculative.
+
+       Still "probably already warm", not "guaranteed ready" — flick through
+       faster than the runway and the network can cover, or open something
+       within instants of it entering the runway, and the same brief blur
+       can still show. */
     function initFullPrefetch(){
       var conn = navigator.connection || navigator.webkitConnection || navigator.mozConnection;
       if(conn && (conn.saveData || /2g/.test(conn.effectiveType || ''))) return;
 
       var prefetched = {};
-      var queue = [];
+      var queue = []; /* gi values, kept sorted nearest-to-current-view first */
       var inFlight = 0, MAX_PARALLEL = 2;
       function pump(){
         while(inFlight < MAX_PARALLEL && queue.length){
-          var src = queue.shift();
+          var f = ARCHIVE[queue.shift()];
+          if(!f || !f.img) continue;
           inFlight++;
           var img = new Image();
           try{ img.fetchPriority = 'low'; }catch(e){}
           var done = function(){ inFlight--; pump(); };
           img.onload = done; img.onerror = done;
-          img.src = src;
+          img.src = f.img;
         }
       }
       /* requestIdleCallback's own {timeout} option is supposed to be this
@@ -1732,19 +1745,37 @@ a{color:inherit;}
         setTimeout(run, 600);
       }
       function scan(){
+        var vh = window.innerHeight || 800;
         var top = window.pageYOffset || document.documentElement.scrollTop || 0;
-        var bottom = top + (window.innerHeight || 800);
-        var queuedAny = false;
+        /* same 2.5-screen runway as the thumbnail loader (loadForScroll) —
+           see the comment above for why matching it, not shrinking it, is
+           the actual fix */
+        var bottom = top + vh * 2.5;
+        var viewCenter = top + vh/2;
+        var addedAny = false;
         cells.forEach(function(c){
           var t = c.offsetTop, b = t + c.offsetHeight;
-          if(b < top || t > bottom) return; /* not currently on screen */
+          if(b < top || t > bottom) return; /* not on screen or in the runway */
           var gi = +c.dataset.gi;
           if(prefetched[gi]) return;
           prefetched[gi] = true;
-          var f = ARCHIVE[gi];
-          if(f && f.img){ queue.push(f.img); queuedAny = true; }
+          queue.push(gi);
+          addedAny = true;
         });
-        if(queuedAny) idle(pump);
+        /* nearest-to-current-view first, re-sorted on every scan rather than
+           appended in DOM order: a fast flick can drop dozens of newly
+           in-range cells into the queue at once, and DOM order would put
+           whatever's furthest along the row BEHIND everything the reader
+           scrolled past to get there — exactly backwards from what a low
+           concurrency limit (2 at a time) needs prioritised. Cheap: the
+           queue is at most a few dozen entries, sorted a few times a
+           second at most while actively scrolling. */
+        if(addedAny){
+          queue.sort(function(giA, giB){
+            return Math.abs(cells[giA].offsetTop - viewCenter) - Math.abs(cells[giB].offsetTop - viewCenter);
+          });
+          idle(pump);
+        }
       }
       idle(scan);
       window.addEventListener('scroll', function(){ idle(scan); }, {passive:true});
