@@ -366,8 +366,27 @@ a{color:inherit;}
 .grain{position:absolute;inset:-20%;filter:url(#grain);opacity:.15;mix-blend-mode:overlay;pointer-events:none;}
 .ph.real img{display:block;width:100%;height:100%;object-fit:cover;}
 .ph-thumb,.ph-full{position:absolute;inset:0;}
+/* the viewer's cached grid thumbnail, stretched up to full-photo size while
+   the real file downloads, used to just look like a soft, low-quality
+   version of the photo — reading as "this is the final image, and it's
+   bad" rather than "this is loading". An actual blur plus the site's own
+   film-grain texture (same #grain filter the grid's cards use) reads as a
+   deliberate loading state instead: closer to a scan of a contact print
+   than a compression artifact. scale(1.08) keeps the blurred edge from
+   ever showing inside the frame — .ph's own overflow:hidden clips it.
+   Permanent rather than toggled: once .ph-full covers it at opacity:1,
+   what's happening underneath no longer matters. */
+.ph-thumb{filter:blur(18px) saturate(.85); transform:scale(1.08);}
 .ph-full{opacity:0;transition:opacity .35s ease;}
 .ph-full.loaded{opacity:1;}
+/* sits on top of both images; fades out together with the blur once the
+   real photo is in, on the same .35s as .ph-full's own fade so the two
+   read as one transition rather than two. Stronger than the grid's resting
+   .15 (and much stronger than its own .02 loading-placeholder grain) —
+   this one has one job, being obviously part of a loading state, not
+   ambient texture on a finished photo. */
+.grain.load{opacity:.32; transition:opacity .35s ease;}
+.ph-full.loaded ~ .grain.load{opacity:0;}
 .grid .ph{opacity:.9;transition:opacity .2s ease;}
 :root[data-theme="dark"] .grid .ph{opacity:.85;}
 .grid .grain.noise{opacity:.02;transition:opacity .2s ease;}
@@ -1414,11 +1433,14 @@ a{color:inherit;}
       return '<div class="'+cls+'"><img data-src="'+f.thumb+'" alt="">'+grain+'</div>';
     }
     /* viewer: the thumb is already cached from the grid, so it paints
-       instantly; the full-res image fades in over it once it has actually
-       loaded, instead of leaving a blank flash while it fetches. */
+       instantly, blurred and grained (see .ph-thumb/.grain.load in CSS) so
+       it reads as a loading state rather than the photo's actual quality;
+       the full-res image fades in over it, blur/grain and all, once it has
+       actually loaded. */
     var img = '<img class="ph-thumb" src="'+f.thumb+'" alt="">'
-      + '<img class="ph-full" src="'+f.img+'" loading="lazy" alt="">';
-    return '<div class="'+cls+'">'+img+grain+'</div>';
+      + '<img class="ph-full" src="'+f.img+'" loading="lazy" alt="">'
+      + '<i class="grain load"></i>';
+    return '<div class="'+cls+'">'+img+'</div>';
   }
 
   /* ---------- soft scroll tick + whoosh ---------- */
