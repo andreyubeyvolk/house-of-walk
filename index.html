@@ -1745,13 +1745,20 @@ a{color:inherit;}
       var osc = ctx.createOscillator();
       var filter = ctx.createBiquadFilter();
       var gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(120, t);
-      osc.frequency.exponentialRampToValueAtTime(55, t + 0.05);
+      /* was a 120->55Hz sine under a 220Hz lowpass — almost entirely below
+         what a phone speaker actually reproduces, and quieter than the
+         scroll tick on top of that, which is why it read as near-silent.
+         Triangle (more harmonic content than sine) sweeping through a
+         range small speakers handle, a filter open enough to let that
+         content through, and a peak gain matching the tick's rather than
+         sitting under it. */
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(260, t);
+      osc.frequency.exponentialRampToValueAtTime(140, t + 0.05);
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(220, t);
+      filter.frequency.setValueAtTime(900, t);
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.linearRampToValueAtTime(0.026, t + 0.004);
+      gain.gain.linearRampToValueAtTime(0.05, t + 0.004);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
       osc.connect(filter).connect(gain).connect(ctx.destination);
       osc.start(t);
@@ -2606,6 +2613,18 @@ a{color:inherit;}
     }
   }, {passive:true});
 
+  /* same idea, mobile's input method — 'wheel' above only ever sees a mouse
+     or trackpad, never a touch swipe. Without this, a lerp already easing
+     the page (the "To top" button, or a straggler from closeViewer — see
+     there) had nothing to cancel it the moment a reader's own thumb took
+     over, and fought the real scroll until it finished converging. */
+  window.addEventListener('touchstart', function(){
+    var aboutIsOpen = document.getElementById('aboutPage').classList.contains('open');
+    if(!viewer.classList.contains('open') && !aboutIsOpen){
+      vLerp.stop();
+    }
+  }, {passive:true});
+
   document.addEventListener('keydown', function(e){
     var scrollKeys = ['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '];
     if(scrollKeys.indexOf(e.key) !== -1 && !viewer.classList.contains('open')){
@@ -2906,20 +2925,20 @@ a{color:inherit;}
     hsThumb.style.left = left+'px';
   }
 
-  /* while swiping through photos in the viewer, silently keep the (hidden,
-     body-scroll-locked) grid behind it scrolled to whichever photo is
-     currently centered — window.scrollTo still works even while body
-     scroll is locked, it just isn't reachable by the user's own scroll
-     input. So by the time the viewer closes, the grid is already sitting
-     right on that same photo instead of wherever it happened to be when
-     the viewer was first opened. */
+  /* the frame (in the open viewer's filmstrip) nearest the centre of the
+     view right now — shared by the live neighbour-prefetch (below, runs
+     continuously while swiping) and the one-shot grid repositioning (runs
+     once, only when the viewer closes — see closeViewer). Used to live on
+     window.scrollTo'ing the background grid to match on every swipe too;
+     that "while you're still looking at photos, keep nudging the page
+     behind them" turned out to be exactly what was causing scroll jank
+     after closing — some of that nudging was still in flight, or its
+     layout cost was still being paid, right as real scroll input arrived.
+     Repositioning the grid is now a single hard jump at close time only,
+     hidden under the closing shutter, never live. */
   var lockedPageMaxScroll = 0;
-  function syncGridScrollToOpenFrame(){
-    /* mobile only — on desktop the background grid should stay exactly
-       where it was when the viewer opened, not follow along as you flip
-       through photos. */
-    if(!mobileQuery.matches) return;
-    if(!frameEls.length) return;
+  function findClosestFrame(){
+    if(!frameEls.length) return null;
     var trackW = filmrow.clientWidth;
     var center = filmrow.scrollLeft + trackW/2;
     var closest = null, closestDist = Infinity;
@@ -2928,24 +2947,39 @@ a{color:inherit;}
       var dist = Math.abs(elCenter - center);
       if(dist < closestDist){ closestDist = dist; closest = el; }
     });
+    return closest;
+  }
+
+  /* called once, synchronously, right as closeViewer() starts — not on a
+     timer, not while the viewer is still open. A hard jump rather than an
+     eased one: it happens the instant the closing shutter begins covering
+     the screen, so there's nothing to see snap either way. */
+  function syncGridScrollToOpenFrame(){
+    if(!mobileQuery.matches) return;
+    var closest = findClosestFrame();
     if(!closest) return;
     var cell = grid.querySelector('.cell[data-gi="'+closest.dataset.gi+'"]');
     if(!cell) return;
     var cellRect = cell.getBoundingClientRect();
     var targetY = window.scrollY + cellRect.top - (window.innerHeight/2 - cellRect.height/2);
     targetY = Math.min(Math.max(0, lockedPageMaxScroll), Math.max(0, targetY));
-    /* eased rather than an instant jump — the grid behind is faintly
-       visible through the viewer's translucent background (see .viewer),
-       so a hard window.scrollTo() on every swipe read as the background
-       snapping in steps instead of gliding. Reuses vLerp (the same soft
-       scroller the "To top" button drives) rather than a second mechanism. */
-    vLerp.set(targetY);
+    window.scrollTo(0, targetY);
+  }
+
+  /* mobile only: finds whichever photo is centred right now and warms its
+     next neighbour. Runs continuously while swiping (debounced in onScroll)
+     — unlike the grid repositioning above, this does no scrolling and no
+     layout writes, just a fetchPriority/loading bump, so there's nothing
+     here for it to jank against. */
+  function prefetchAroundCurrent(){
+    if(!mobileQuery.matches) return;
+    var closest = findClosestFrame();
+    if(!closest) return;
     prefetchNextNeighbor(+closest.dataset.gi);
   }
 
-  /* mobile only (see the mobileQuery guard above, in this function's only
-     caller): the tapped photo's own file gets promoted to eager/high the
-     moment it opens (see openViewer), but its neighbours still sat at
+  /* the tapped photo's own file gets promoted to eager/high the moment it
+     opens (see openViewer), but its neighbours still sat at
      fetchpriority="low" + loading="lazy" until the browser's own proximity
      check noticed them — which on a phone was right around the time you'd
      already swiped to them, showing the blurred loading state on every
@@ -2970,17 +3004,14 @@ a{color:inherit;}
       scrollTicking = false;
       updateThumb();
     });
-    /* syncGridScrollToOpenFrame does a linear scan over every frame in the
-       archive plus kicks off a lerp'd window.scrollTo — cheap once, but
-       calling it every single scroll frame during an active mobile swipe
-       (rAF-gated above, so still ~60/sec) was competing with the browser's
-       own momentum scroll of the filmstrip for the same frame budget and
-       showed up as stutter on real phones. Debounced to once the swipe
-       actually settles instead of on every frame while it's moving — the
-       background still eases smoothly into place, it just does the work
-       once per landed photo rather than dozens of times per swipe. */
+    /* debounced to once the swipe settles rather than on every scroll
+       frame — prefetchAroundCurrent does a linear scan over every frame in
+       the archive, cheap once but not free 60 times a second during an
+       active swipe. No scrolling happens here at all now (see
+       syncGridScrollToOpenFrame's own comment) — this only ever warms the
+       next photo's file. */
     clearTimeout(gridSyncDebounce);
-    gridSyncDebounce = setTimeout(syncGridScrollToOpenFrame, 100);
+    gridSyncDebounce = setTimeout(prefetchAroundCurrent, 100);
   }
 
   function openViewer(gi){
@@ -3050,7 +3081,12 @@ a{color:inherit;}
       against a filmstrip position from a previous photo, possibly an entire
       archive away */
     updateThumb();
-    syncGridScrollToOpenFrame();
+    /* not syncGridScrollToOpenFrame here — the grid doesn't need
+       repositioning at open (the reader just tapped this photo from right
+       where the grid already was); that only happens once, at close, after
+       they may have swiped somewhere else entirely. Just warm the next
+       photo the same way every subsequent swipe does. */
+    prefetchAroundCurrent();
     playWhoosh('open');
 
     viewerScrollUsedThisSession = false;
@@ -3070,6 +3106,19 @@ a{color:inherit;}
   }
 
   function closeViewer(){
+    /* the only time the background grid actually moves — a single hard
+       jump to wherever the reader ended up swiping to, fired the instant
+       the closing shutter starts covering the screen so there's nothing
+       visible to snap. Used to also live-track this continuously while the
+       viewer was still open (see that function's own comment); that's what
+       was leaving scroll fights and jank behind once you actually closed
+       something and tried to scroll for real. */
+    syncGridScrollToOpenFrame();
+    /* a stray prefetchAroundCurrent from onScroll's debounce (see there)
+       firing after this is harmless — it doesn't scroll anything — but
+       nothing needs it once the viewer's shut, so clear it anyway. */
+    clearTimeout(gridSyncDebounce);
+    vLerp.stop();
     viewer.classList.remove('open');
     viewer.setAttribute('aria-hidden','true');
     playWhoosh('close');
