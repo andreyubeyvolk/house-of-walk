@@ -66,6 +66,7 @@
   --about-bg-pct:90%;
   --bg-grain-opacity:.48;
   --bg-blur:9px;
+  --ph-placeholder:#E0E0E0;
 }
 :root[data-theme="dark"]{
   --paper:#0D0D0D;
@@ -79,6 +80,7 @@
   --about-bg-pct:95%;
   --bg-grain-opacity:.44;
   --bg-blur:6px;
+  --ph-placeholder:#1F1F1F;
 }
 
 *{box-sizing:border-box;}
@@ -417,9 +419,11 @@ a{color:inherit;}
   aspect-ratio:var(--ar);
   position:relative;
   overflow:hidden;
-  /* flat neutral gray while the thumbnail loads — simpler and more
-     predictable than the old per-series gradient placeholder */
-  background:#E0E0E0;
+  /* flat neutral swatch while the thumbnail loads — simpler and more
+     predictable than the old per-series gradient placeholder. Flips with
+     the theme (see --ph-placeholder) rather than staying light-grey on a
+     dark page, where it read as a stray bright patch. */
+  background:var(--ph-placeholder);
 }
 /* the vignette belongs to the photograph, not to the empty slot it fades in
    over: .loaded is added (see watchPhImages in JS) once there's an actual
@@ -2493,14 +2497,22 @@ a{color:inherit;}
       }, {passive:true});
     }
     /* on mobile the whole panel (photo + label + essay, stacked) scrolls as
-       one unit instead of the essay having its own inner scroll region */
+       one unit instead of the essay having its own inner scroll region.
+       'scroll' rather than 'wheel' here — a touch swipe never fires 'wheel'
+       at all (see the filmrow/window listeners elsewhere), so this was
+       silently dead on every real phone despite working under a mouse.
+       'scroll' carries no deltaY, so direction comes from comparing against
+       the previous position instead of the event itself. */
     var aboutInnerTickGate = makeTickGate(64);
-    aboutInner.addEventListener('wheel', function(e){
+    var aboutInnerLastY = null;
+    aboutInner.addEventListener('scroll', function(){
       if(!mobileQuery.matches) return;
+      var y = aboutInner.scrollTop;
       var max = aboutInner.scrollHeight - aboutInner.clientHeight;
-      var movingDown = e.deltaY > 0;
-      var atBoundary = movingDown ? (aboutInner.scrollTop >= max - 0.5) : (aboutInner.scrollTop <= 0.5);
-      if(!atBoundary && aboutInnerTickGate.check(aboutInner.scrollTop)) playTick();
+      var movingDown = aboutInnerLastY === null ? true : (y > aboutInnerLastY);
+      aboutInnerLastY = y;
+      var atBoundary = movingDown ? (y >= max - 0.5) : (y <= 0.5);
+      if(!atBoundary && aboutInnerTickGate.check(y)) playTick();
     }, {passive:true});
 
     /* 'scroll' rather than 'wheel' here on purpose: touch swipe never fires
@@ -2902,7 +2914,31 @@ a{color:inherit;}
     var cellRect = cell.getBoundingClientRect();
     var targetY = window.scrollY + cellRect.top - (window.innerHeight/2 - cellRect.height/2);
     targetY = Math.min(Math.max(0, lockedPageMaxScroll), Math.max(0, targetY));
-    window.scrollTo(0, targetY);
+    /* eased rather than an instant jump — the grid behind is faintly
+       visible through the viewer's translucent background (see .viewer),
+       so a hard window.scrollTo() on every swipe read as the background
+       snapping in steps instead of gliding. Reuses vLerp (the same soft
+       scroller the "To top" button drives) rather than a second mechanism. */
+    vLerp.set(targetY);
+    prefetchNextNeighbor(+closest.dataset.gi);
+  }
+
+  /* mobile only (see the mobileQuery guard above, in this function's only
+     caller): the tapped photo's own file gets promoted to eager/high the
+     moment it opens (see openViewer), but its neighbours still sat at
+     fetchpriority="low" + loading="lazy" until the browser's own proximity
+     check noticed them — which on a phone was right around the time you'd
+     already swiped to them, showing the blurred loading state on every
+     single swipe. Warming the very next one as soon as the current one
+     settles means it's usually already there by the time you get to it. */
+  function prefetchNextNeighbor(gi){
+    var nextEl = filmrow.querySelector('[data-gi="'+(gi+1)+'"]');
+    if(!nextEl) return;
+    var img = nextEl.querySelector('.ph-full');
+    if(img && !img.complete){
+      img.loading = 'eager';
+      img.fetchPriority = 'high';
+    }
   }
 
   var scrollTicking = false;
