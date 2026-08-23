@@ -172,8 +172,19 @@ a{color:inherit;}
 }
 .preloader-planet{
   position:absolute;
-  left:8%;
-  top:8%;
+  /* centred via inset+auto-margin rather than left/top:8% (which was the
+     same 84% figure as the width/height below, just expressed the other
+     way round). Both versions are symmetric on paper, but left/top/width
+     each round to a device pixel independently — on a display where 8% and
+     84% of the orb's size don't happen to round to values that still sum to
+     exactly 100%, one side ends up a pixel tighter than the other, which is
+     the hairline-thicker-on-one-side gap this was showing on desktop.
+     inset:0 + margin:auto asks the browser for ONE number — half of
+     whatever's left over after the image's own (already-rounded) width —
+     and applies it to both sides, so there's no second independent
+     rounding left to disagree with the first. */
+  inset:0;
+  margin:auto;
   width:84%;
   height:84%;
   display:block;
@@ -1471,6 +1482,42 @@ a{color:inherit;}
       osc.stop(t + 0.05);
     }catch(e){}
   }
+  /* every scrollable strip on the site (the main page, the essay panel, the
+     horizontal filmstrip) wants a tick roughly once per STEP px of actual
+     travel, regardless of what's driving that travel. That "regardless" is
+     the whole point: a mouse wheel notch covers ~100px in one 'wheel' event,
+     so gating on events-since-last-tick reads fine, but a trackpad delivers
+     the same 100px as a burst of a dozen-plus tiny events — gate on THAT and
+     it fires a dozen ticks where a mouse fired one, a machine-gun rather
+     than a ratchet. Gating on distance covered instead of event count gets
+     the mouse and the trackpad to sound the same, because it no longer
+     matters how many events it took to cover the ground.
+
+     One call site per scrollable strip, each with its own gate — the essay
+     panel and the filmstrip are independent scroll positions, ticking off
+     one doesn't consume the other's budget. null rather than 0 as the
+     initial position, so the very first movement of a session reads as
+     "haven't ticked yet" rather than "moved 0 -> wherever", which would
+     fire immediately regardless of how far that first movement actually was. */
+  function makeTickGate(step){
+    var last = null;
+    return {
+      check: function(pos){
+        if(last === null){ last = pos; return false; }
+        if(Math.abs(pos - last) < step) return false;
+        last = pos;
+        return true;
+      },
+      /* for a position that jumped for a reason that isn't the reader's
+         input (the viewer/essay opening, or the filmstrip re-centering on a
+         newly opened photo) — the next real movement should be measured
+         from here, not from wherever the gate last saw. Called with no
+         argument, the gate forgets its baseline outright: the same as never
+         having ticked at all, for a scroll container that just came into
+         relevance and has no ground truth of its own yet to reset to. */
+      reset: function(pos){ last = (arguments.length ? pos : null); }
+    };
+  }
   function playWhoosh(dir, opts){
     opts = opts || {};
     var rough = !!opts.rough;
@@ -1590,17 +1637,18 @@ a{color:inherit;}
 
     /* THE first portion: whatever the grid puts inside the first two screens,
        which is what someone actually sees before they scroll — a count would
-       be wrong at one breakpoint or the other, since the same 24 photos are
-       eight rows on a phone and four on a desktop. Floored so a very short
-       window still gets a sensible batch, capped so a very tall one doesn't
-       turn the loader into a wait for half the archive. */
+       be wrong at one breakpoint or the other, since the same photos are
+       many rows on a phone and few on a desktop. Floored at 40 so even a
+       short window is worth genuinely having ready (these are thumbnails,
+       ~18KB each — 40 of them is under 1MB), capped so a very tall window
+       doesn't turn the loader into a wait for half the archive. */
     var vh = window.innerHeight || 800;
     var firstCount = 0;
     for(var i=0;i<cells.length;i++){
       if(cells[i].offsetTop < vh*2) firstCount++;
       else break;
     }
-    firstCount = Math.min(cells.length, Math.max(12, Math.min(30, firstCount)));
+    firstCount = Math.min(cells.length, Math.max(40, Math.min(80, firstCount)));
 
     /* THE rest, on approach: everything down to two and a half viewport
        heights from the current scroll position, which is the screen you are
@@ -2167,22 +2215,24 @@ a{color:inherit;}
        scroll as "already at the top" and never make a sound going up. */
     var aboutEssay = document.querySelector('.about-essay');
     if(aboutEssay){
+      var essayTickGate = makeTickGate(64);
       aboutEssay.addEventListener('wheel', function(e){
         if(mobileQuery.matches) return; /* .about-essay doesn't scroll itself on mobile — .about-inner does, see below */
         var max = aboutEssay.scrollHeight - aboutEssay.clientHeight;
         var movingDown = e.deltaY > 0;
         var atBoundary = movingDown ? (aboutEssay.scrollTop >= max - 0.5) : (aboutEssay.scrollTop <= 0.5);
-        if(!atBoundary) playTick();
+        if(!atBoundary && essayTickGate.check(aboutEssay.scrollTop)) playTick();
       }, {passive:true});
     }
     /* on mobile the whole panel (photo + label + essay, stacked) scrolls as
        one unit instead of the essay having its own inner scroll region */
+    var aboutInnerTickGate = makeTickGate(64);
     aboutInner.addEventListener('wheel', function(e){
       if(!mobileQuery.matches) return;
       var max = aboutInner.scrollHeight - aboutInner.clientHeight;
       var movingDown = e.deltaY > 0;
       var atBoundary = movingDown ? (aboutInner.scrollTop >= max - 0.5) : (aboutInner.scrollTop <= 0.5);
-      if(!atBoundary) playTick();
+      if(!atBoundary && aboutInnerTickGate.check(aboutInner.scrollTop)) playTick();
     }, {passive:true});
 
     /* 'scroll' rather than 'wheel' here on purpose: touch swipe never fires
@@ -2245,14 +2295,14 @@ a{color:inherit;}
   /* ---------- viewer ---------- */
   var viewer = document.getElementById('viewer');
 
+  /* stopping the "to top" animation is the only job left here — the tick
+     itself moved to the 'scroll' listener below, which reacts to how far the
+     page has actually moved rather than how many wheel events it took to
+     get there. See that listener for why. */
   window.addEventListener('wheel', function(e){
     var aboutIsOpen = document.getElementById('aboutPage').classList.contains('open');
     if(!viewer.classList.contains('open') && !aboutIsOpen){
       vLerp.stop();
-      var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      var movingDown = e.deltaY > 0;
-      var atBoundary = movingDown ? (window.scrollY >= maxScroll - 0.5) : (window.scrollY <= 0.5);
-      if(!atBoundary) playTick();
     }
   }, {passive:true});
 
@@ -2282,13 +2332,18 @@ a{color:inherit;}
     try{ if(navigator.vibrate) navigator.vibrate(ms || 12); }catch(e){}
   }
 
-  /* a touch swipe never fires a wheel event, so the wheel-driven tick above
-     is silent on a phone. Drive it off 'scroll' there instead — but one tick
-     per scroll event would be a continuous rattle during a fling, so fire on
-     each STEP px of travel. That reads as a ratchet, roughly a tick per row
-     of cards, and it self-throttles at any scroll speed. */
-  var TICK_STEP = 64;
-  var lastTickScrollY = 0;
+  /* driven off 'scroll' — how far the page has actually moved — rather than
+     off 'wheel' events, which is what this used to be keyed on and is
+     exactly the wrong signal: a mouse notches through ~100px per event, so
+     one event = one tick reads fine, but a trackpad delivers the same
+     distance as a burst of a dozen-plus tiny events, and one tick per event
+     turned that into a machine-gun. A touch swipe never fires 'wheel' at
+     all, so this is also the only thing that makes a sound on a phone.
+
+     One tick per STEP px of travel reads as a ratchet — roughly a tick per
+     row of cards — at any scroll speed, on any input device, because it's
+     gated on distance covered, not on how many events it took to cover it. */
+  var pageTickGate = makeTickGate(64);
   window.addEventListener('scroll', function(){
     var y = window.scrollY;
     /* the grid behind the viewer is scrolled programmatically while a photo
@@ -2296,16 +2351,14 @@ a{color:inherit;}
        of that is the reader's thumb, so it makes no sound. Re-baseline
        rather than just bailing out, or the first genuine scroll afterwards
        would inherit all that skipped travel and tick immediately. */
-    if(!mobileQuery.matches
-       || viewer.classList.contains('open')
+    if(viewer.classList.contains('open')
        || document.getElementById('aboutPage').classList.contains('open')){
-      lastTickScrollY = y;
+      pageTickGate.reset(y);
       return;
     }
-    if(Math.abs(y - lastTickScrollY) < TICK_STEP) return;
-    lastTickScrollY = y;
-    /* silent at the very ends, same rule the wheel handler uses: the page
-       isn't actually travelling any more, so it shouldn't keep ticking */
+    if(!pageTickGate.check(y)) return;
+    /* silent at the very ends: the page isn't actually travelling any more,
+       so it shouldn't keep ticking */
     var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     if(y <= 0.5 || y >= maxScroll - 0.5) return;
     playTick();
@@ -2320,6 +2373,13 @@ a{color:inherit;}
   var frameEls = [];
   var hLerp = null;
   var viewerScrollUsedThisSession = false;
+  /* reset in openViewer, not just declared here: without that, reopening on
+     a different photo after closing would measure the first scroll of the
+     new session against wherever the filmstrip was left scrolled to at the
+     end of the LAST one — a stale baseline that could be an entire archive
+     away, either firing a tick that shouldn't happen or swallowing one that
+     should. */
+  var filmTickGate = makeTickGate(64);
 
   /* desktop only: the filmrow has generous padding (50vw each side, see
      CSS) so the first/last photo CAN be scrolled to dead center same as any
@@ -2373,6 +2433,14 @@ a{color:inherit;}
       0.133
     );
 
+    /* same reasoning as the main page's 'scroll' listener (see makeTickGate):
+       gate on how far the filmstrip has actually moved, not on how many
+       wheel events it took to move it — a trackpad fires many tiny deltaY
+       events per mouse-wheel notch, and ticking once per event turned that
+       into a machine-gun. filmTickGate is reset in openViewer, not declared
+       fresh here, since this listener is attached exactly once (buildViewer
+       only ever runs once) but the filmstrip gets re-centered on a new photo
+       every time the viewer reopens. */
     filmrow.addEventListener('wheel', function(e){
       var dx = Math.abs(e.deltaX), dy = Math.abs(e.deltaY);
       if(dy >= dx){
@@ -2383,7 +2451,7 @@ a{color:inherit;}
         var atBoundary = movingForward ? (t >= bounds.max - 0.5) : (t <= bounds.min + 0.5);
         t = Math.min(bounds.max, Math.max(bounds.min, t + e.deltaY*1.6));
         hLerp.set(t);
-        if(!atBoundary) playTick();
+        if(!atBoundary && filmTickGate.check(t)) playTick();
         e.preventDefault();
       }
     }, {passive:false});
@@ -2619,6 +2687,10 @@ a{color:inherit;}
       filmrow.scrollLeft = Math.round(next * dpr) / dpr;
     }
     hLerp.sync();
+    filmTickGate.reset(); /* forget wherever the LAST viewer session left this
+      — otherwise the first scroll on a newly opened photo gets measured
+      against a filmstrip position from a previous photo, possibly an entire
+      archive away */
     updateThumb();
     syncGridScrollToOpenFrame();
     playWhoosh('open');
