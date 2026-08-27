@@ -828,27 +828,41 @@ a{color:inherit;}
 
 /* ---------- inline photo footnote marker ----------
    [0042] / [PHOTO] in an essay's body text, set like a footnote reference:
-   small, semibold, raised. vertical-align:super on its own would grow the
-   line box and open a visible gap between this paragraph's lines and every
-   other one -- line-height:0 on the raised box is the standard fix, and it
-   works here because the marker is a single short run with nothing to wrap.
-   It's a real <button> rather than an <a>: it opens a layer, it doesn't
-   navigate, and a button is what a screen reader should announce. */
+   small, raised, and painted as a solid inverted chip -- ink background,
+   paper text (paper/ink swap with the theme, so this flips correctly in
+   dark mode without a separate rule) -- the same "selected text" look the
+   rest of the site already uses for focus/hover on its plate buttons. Plain
+   font-weight alone read as barely-there: the embedded body font only ships
+   a 400 weight, so a heavier weight here is the browser's own synthetic
+   bold, which several mobile browsers apply weakly or not at all -- a solid
+   background isn't relying on that at all, so it reads as emphasized
+   everywhere. vertical-align:super on its own would grow the line box and
+   open a visible gap between this paragraph's lines and every other one --
+   line-height:0 on the raised box is the standard fix, and it works here
+   because the marker is a single short run with nothing to wrap. It's a
+   real <button> rather than an <a>: it opens a layer, it doesn't navigate,
+   and a button is what a screen reader should announce. */
 .er-ref{
   all:unset;
-  font-weight:600;
+  font-weight:700;
   font-size:.68em;
   vertical-align:super;
   line-height:0;
   cursor:pointer;
+  background:var(--ink);
+  color:var(--paper);
+  padding:1px 3px;
   /* the marker sits flush against the word it follows ("roughness0042"),
      so it needs a hair of air on the left only */
   margin-left:.12em;
   font-variant-numeric:tabular-nums;
   transition:opacity .15s;
 }
-.er-ref:hover{opacity:.55;}
-.er-ref:focus-visible{background:var(--ink); color:var(--paper);}
+.er-ref:hover{opacity:.65;}
+/* the resting state IS already the site's own "selected" look, so focus
+   can't reuse it to signal anything -- uninvert instead, the same
+   distinction a caret makes moving on and off a highlighted word. */
+.er-ref:focus-visible{background:var(--paper); color:var(--ink);}
 
 /* ---------- footnote photo layer ----------
    Full height, flush to the right and bottom screen edges, width purely
@@ -3061,15 +3075,43 @@ a{color:inherit;}
       if(!essay) return;
       var wasOpen = essayReader.classList.contains('open');
       /* going from one essay straight into another (the wordmark, while a
-         Period is up) still arrives as a shutter, not a silent swap of the
-         text underneath you. Without this the new essay simply appeared in
-         place, which read as a glitch rather than a move -- especially with
-         a footnote photo open over the old one. Snapping .open off with
-         transitions disabled, forcing a reflow, then putting it back gives
-         the drop a real starting point to animate from again. */
+         Period is up) has to read as Essay's OWN shutter arriving over the
+         Period still on screen -- not as Period vanishing and a new shutter
+         starting from scratch a moment later, which is what simply swapping
+         this element's content and replaying its animation looked like:
+         both essays live in the exact same box, so there's no real "Period"
+         left to be seen UNDER anything once its text is overwritten.
+         A frozen clone stands in for it: snapshotted here, before anything
+         changes, inserted right before the real element (so plain DOM order
+         -- both share the same z-index:6 -- puts the real one on top),
+         holding still while the real box gets Essay's content and replays
+         its shutter over it. Once fully covered the clone is invisible
+         either way, so it's just discarded (see the setTimeout below) --
+         nothing is left to reveal but the real page once Essay closes. */
       var changingEssay = wasOpen && currentEssayCode !== code;
+      var ghost = null;
+      if(changingEssay){
+        ghost = essayReader.cloneNode(true);
+        ghost.removeAttribute('id');
+        var ghostInner = ghost.querySelector('#essayReaderInner');
+        if(ghostInner){
+          /* cloneNode copies markup, not runtime state -- without this the
+             clone would start scrolled to its own top regardless of how far
+             into Period the reader actually was, showing the wrong moment
+             frozen behind the new shutter. */
+          ghostInner.removeAttribute('id');
+          ghostInner.scrollTop = essayReaderInner.scrollTop;
+        }
+        essayReader.parentNode.insertBefore(ghost, essayReader);
+      }
       closePhotoLayer(true);
-      window.scrollTo(0, 0);
+      /* NOT window.scrollTo(0,0): the reader is a position:fixed overlay
+         covering the whole viewport regardless of where the main page is
+         scrolled, and its OWN content already starts at essayReaderInner's
+         scrollTop=0 below -- scrolling the page underneath achieved nothing
+         except a visible flash on mobile, where the jump to the top ran
+         BEFORE the shutter had covered anything, so it read as its own
+         separate, jarring motion ahead of the actual open. */
       currentEssayCode = code;
       currentEssay = essay;
       syncEssayReaderTop();
@@ -3087,6 +3129,12 @@ a{color:inherit;}
       document.body.style.overflow = 'hidden';
       if(!wasOpen || changingEssay) playWhoosh('open');
       gcEvent('essay-reader/open/'+code, 'Essay reader opened: '+code);
+      if(ghost){
+        /* matches the shutter's own .6s clip-path transition, with a little
+           slack -- by the time this fires the real reader has fully covered
+           the screen, so removing the clone underneath it is imperceptible */
+        setTimeout(function(){ ghost.remove(); }, 650);
+      }
 
       /* the About essay is the one opened from the wordmark rather than a
          cover card, so it alone keeps the wordmark's planet spinning for as
@@ -3189,16 +3237,24 @@ a{color:inherit;}
       var vw = document.documentElement.clientWidth;
       var availH = Math.max(0, window.innerHeight - headBottom);
       var ar = photoLayFrame.ar || (2/3);
-      var w = availH * ar;
-      var h = availH;
-      var maxW;
+      var w, h, maxW;
       if(photoLayCentered){
-        /* phone: nothing to sit beside, so the photo runs edge to edge the
-           way an opened photo does everywhere else on a phone -- no page
-           margin, no grid. Whatever height is left over around it shows the
-           essay underneath, blurred (see .photolay.centered in CSS). */
+        /* phone: width-driven, not height-driven -- full screen width, same
+           as every other opened photo on a phone (the real carousel's own
+           .frame .ph is width:100%; height:auto; aspect-ratio:var(--ar)).
+           Sizing off availH like the side-layer case below does was the
+           actual bug: a portrait photo's height-driven width came out
+           narrower than the screen, leaving visible margins on both sides
+           instead of running edge to edge. Height just follows from the
+           width and the photo's own ratio, whatever that comes out to --
+           if it runs past the bottom of the screen that's fine, same as it
+           would be in the carousel. */
+        w = vw;
+        h = w / ar;
         maxW = vw;
       } else {
+        w = availH * ar;
+        h = availH;
         var titleEl = essayReaderInner.querySelector('.er-title');
         /* the title's own box starts at its column's left edge even though
            its text is nowrap and may visually overhang -- that edge is the
