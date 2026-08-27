@@ -731,144 +731,259 @@ a{color:inherit;}
   clip-path:inset(0 0 0% 0);
   transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear 0s;
 }
-.about-inner{
-  position:absolute;
-  top:0;left:0;right:0;bottom:0;
-  display:grid;
-  grid-template-columns:repeat(10,1fr);
-  gap:14px;
-  padding:0 var(--pad) 40px;
-  /* THE reason the essay's columns didn't line up with the photo grid's on a
-     tablet. Where this element scrolls, a classic scrollbar takes ~15px out
-     of its content box — and since its columns are 1fr, all of them get
-     narrower, so every column but the first drifts left of the grid column
-     it is supposed to sit on (3px per column at five columns, 3.75 at four).
-     Hiding the scrollbar puts its content width back on exactly the page's
-     own, which is what the header and the grid were measured against. Costs
-     nothing on the devices this tier is for: touch scrollbars are overlays
-     with no width to begin with, and .filmrow already does the same. */
-  scrollbar-width:none;
+/* ---------- essay cover card (grid) ----------
+   Only the photo tilts, like a print dropped crooked onto the desk — the
+   tag label stays put and reads straight, same as every other card's. The
+   image is full card width, just rotated, so its corners deliberately poke a
+   little past the card's own edge into the gutter between columns (overflow
+   left visible, not clipped, on this one card only — every other .ph stays
+   overflow:hidden). On hover it un-rotates back to flush with the card.
+   No vignette here either: that radial-gradient darkening is for photos,
+   not for a designed cover graphic. background:none clears .ph's own grey
+   loading-placeholder swatch, which otherwise shows through as a flat grey
+   sliver at the two corners the rotated image pulls away from (the other two
+   corners poke past the edge instead — a rotated square doesn't cover a
+   square frame evenly on all four corners at once). Hover-guarded per the
+   mobile-:hover-sticking lesson learned on the sandbox's own cards —
+   untargeted :hover rules stay "on" after a tap on touch devices with no
+   mouseleave to clear them. */
+.cell.essay-cover .ph{ overflow:visible; background:none; }
+.cell.essay-cover .ph.loaded::after{ content:none; }
+/* every other card's tag reads as caps because the code itself already is
+   one (KAS_NOV25_0001) — this one's label is a real sentence, so it needs
+   the transform to match instead of being typed in caps at the source
+   (which would also capitalize it everywhere else it's reused, e.g. the
+   cover image's alt text). */
+.cell.essay-cover .tag{ text-transform:uppercase; }
+.cell.essay-cover .ph img{
+  transform:rotate(-2deg);
+  transition:transform .3s ease;
 }
-.about-inner::-webkit-scrollbar{display:none;}
-/* grid-row:1 on all three is load-bearing, not decorative: with only
-   grid-column set, CSS Grid's sparse auto-placement decides each item's row
-   by walking the grid in DOM order and never moving its cursor backward
-   within a row. .about-photo is last in the markup (moved there so mobile's
-   flex layout can put the photo after the text) but needs the *earliest*
-   columns (1/6) — without an explicit row, the placement cursor has already
-   advanced past column 6 by the time it gets placed, so it gets pushed onto
-   a whole new row instead of sharing row 1 with the label/essay. Pinning
-   all three to row 1 explicitly makes the placement immune to DOM order. */
-.about-photo{overflow:hidden; grid-column:1 / 6; grid-row:1;}
-.about-photo img{width:100%;height:100%;display:block;object-fit:cover;}
-/* text has ascent/leading space above the glyphs that an <img> box doesn't,
-   so at identical grid-row-start it still reads as sitting lower than the
-   photo's hard top edge — nudge both text columns up to compensate. */
-.about-label{grid-column:6 / 7; grid-row:1; margin-top:-.3em;}
-.about-essay{
-  grid-column:7 / 11;
-  grid-row:1;
-  height:100%;
-  margin-top:-.3em;
+@media (hover:hover){
+  .cell.essay-cover:hover .ph img{transform:rotate(0deg);}
+}
+/* touch has no hover to un-tilt the card with, so the tap itself does it:
+   for the fraction of a second the card is still on screen before the
+   reader's shutter covers it, it straightens the same way it does under a
+   mouse. Applied from JS (see the grid's click handler) rather than :active,
+   which is unreliable on touch and would also fire on a scroll that merely
+   started on the card. */
+.cell.essay-cover.tapped .ph img{transform:rotate(0deg);}
+
+/* ---------- essay reader (Period page) ----------
+   Reuses .about's own shutter-reveal/blur/grain/theme-inversion CSS wholesale
+   (shared class, not duplicated rules) — only the inner layout is new. Column
+   widths are NOT a media-query guess and not even a matching repeat(N,1fr)
+   formula — JS copies the real photo grid's own measured column pixel
+   widths verbatim (see measureRealGridColumns), so there's no independent
+   arithmetic left to drift out of sync with it. The values below are only
+   the fallback for the one frame before JS runs. */
+.essay-reader{ z-index:6; } /* over the grid, under the sticky topbar (10) and the photo layer (50) */
+.essay-reader-inner{
+  position:absolute;
+  /* top is set from JS (syncEssayReaderTop) to the header's own real bottom
+     edge, not 0 -- so this box, and the native scrollbar riding its own
+     right edge, both start below the header instead of running the full
+     viewport height and having their top few pixels sit hidden under the
+     opaque sticky header. */
+  top:0; left:0; right:0; bottom:0;
   overflow-y:auto;
+  overflow-x:hidden; /* the explicit-px column tracks are sized to fit exactly -- any horizontal scroll here would only ever be the visible scrollbar's own width quietly stealing a few px it wasn't accounted for, not real overflow content */
+  -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding-right:6px;
-  display:grid;
-  grid-template-columns:1fr 3fr;
-  column-gap:14px;
-  /* clearly bigger than a paragraph's own 1.3em bottom margin (.essay-body p),
-     so one subheading+text block reads as visually separate from the next */
-  row-gap:3.2em;
-  align-content:start;
-  /* scrollbar-width/-color are not inherited from html — each independently
-     scrollable element needs them set directly, or Firefox falls back to
-     its default (wider) scrollbar for this one specifically. */
+  /* visible on purpose, matching .about-essay's own classic Essay-page
+     scrollbar (thin, ink-colored) rather than hidden — it renders in this
+     element's own padding-right margin, at the screen's edge, clear of the
+     real text columns underneath. */
   scrollbar-width:thin;
   scrollbar-color:var(--ink) transparent;
+  /* the closing gap under the last paragraph is the same var(--pad) the
+     text already has from the left and right edges, so the essay ends
+     inside an even frame instead of running flush into the bottom of the
+     screen. (padding-top is overwritten from JS by syncEssayReaderTop;
+     left/right by applyEssayReaderCols -- only this bottom value is
+     actually used from the shorthand.) */
+  padding:16px var(--pad) var(--pad);
+  display:grid;
+  grid-template-columns:repeat(10,1fr);
+  column-gap:14px;
+  row-gap:0;
 }
-/* line-height:1.6 matches .essay-body p's own — both sit at the same
-   grid-row-start, but without a matching line-height the subheading's text
-   baseline sits noticeably higher than the paragraph's first line despite
-   both boxes technically starting at the same point. */
-.essay-sub{grid-column:1; line-height:1.6;}
-.essay-body{grid-column:2;}
-.essay-body p{margin:0 0 1.3em; line-height:1.6;}
-.essay-body p:last-child{margin-bottom:0;}
-
-/* ---------- tablet + iPad ----------
-   Neither the mobile single-column stack nor the desktop side-by-side split
-   reads well at these in-between widths, so the essay page gets its own
-   layout: title, then subheadings+text, then the photo full-width at the
-   bottom — everything as ONE outer grid, with the label on column 1 beside
-   "House of Walk", the subheading on column 2 beside "A personal archive",
-   and the body text from column 3 out to the edge.
-
-   How many columns that is comes from JS (syncEssayColumns), measured off
-   the photo grid's own first row, NOT from a breakpoint. The grid sizes
-   itself with auto-fill, so its column count depends on the width actually
-   available — which includes whether the browser is spending 10-15px on a
-   scrollbar. A media query cannot see that, and the two disagreed for a
-   band of widths either side of the flip: at exactly 860px with a desktop
-   scrollbar the grid was still on four columns while the essay had already
-   moved to five, putting the body text 80px left of the column it was
-   supposed to sit on. Measuring the real thing removes the guess entirely.
-   The values below are only the fallback for the frame before JS runs. */
-@media (min-width:681px) and (max-width:1050px){
-  :root{
-    --essay-cols:4;
-    --essay-inner-cols:3;
-  }
-  .about-inner{
-    grid-template-columns:repeat(var(--essay-cols),1fr);
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    /* small visual gap from the header, distinct from the 6px technical
-       clearance aboutInner.style.top already adds everywhere. Applied here
-       rather than as margin-top on the label/essay individually so both
-       start from the exact same baseline and stay genuinely on one row. */
-    padding-top:20px;
-  }
-  .about-label{
-    grid-column:1;
-    grid-row:1;
-    margin-top:0; /* desktop's -.3em compensates for sitting beside a photo's
-      hard top edge — the label's row-mate here is essay text, not a photo */
-  }
-  .about-essay{
-    grid-column:2 / -1;
-    grid-row:1;
-    height:auto;
-    margin-top:0;
-    overflow-y:visible;
-    padding-right:0;
-    /* the essay's own columns ARE the outer grid's columns, not a ratio that
-       approximates them: equal tracks with the same 14px gutter subdivide
-       the outer columns this spans exactly, because equal columns with equal
-       gutters nest perfectly. The 1fr/3fr split the desktop uses is the
-       right proportion but the wrong arithmetic here — it divides the whole
-       span including its gutters, which lands a few pixels off the real
-       column edge. */
-    grid-template-columns:repeat(var(--essay-inner-cols),1fr);
-    column-gap:14px;
-  }
-  .about-essay .essay-sub{grid-column:1;}
-  .about-essay .essay-body{grid-column:2 / -1;}
-  .about-photo{
-    grid-column:1 / -1;
-    grid-row:2;
-    margin-top:2.4em;
-    /* overflow:hidden here (inherited from the desktop rule) clamps this
-       item's automatic minimum size to 0 for grid sizing purposes too — same
-       underlying rule as the flex-shrink bug fixed for mobile. Without
-       content-based sizing, an auto grid row can end up a few px tall
-       instead of the photo's real aspect-ratio-driven height, which is
-       exactly what was happening — the photo was there, just squeezed into
-       ~0 height. Not needed here anyway since object-fit isn't cropping
-       anything once the image sizes by its own aspect-ratio. */
-    overflow:visible;
-  }
-  .about-photo img{height:auto; aspect-ratio:1012/1800;}
+/* the real site header (topbar) is already visible above this overlay,
+   exactly like it stays visible above .about — repeating "House of Walk /
+   A personal archive" as a second block down here would just be the same
+   header twice. The title row sits directly below it instead. */
+.er-title{
+  grid-row:1;
+  line-height:1.5;
+  white-space:nowrap;
+  text-transform:uppercase;
 }
+.er-title .er-subtitle{
+  font-weight:400;
+}
+.er-sub{line-height:1.6;}
+.er-text p{margin:0 0 var(--er-p-gap,16px); line-height:1.6;}
+.er-text p:last-child{margin-bottom:0;}
+
+/* ---------- inline photo footnote marker ----------
+   [0042] / [PHOTO] in an essay's body text, set like a footnote reference:
+   small, semibold, raised. vertical-align:super on its own would grow the
+   line box and open a visible gap between this paragraph's lines and every
+   other one -- line-height:0 on the raised box is the standard fix, and it
+   works here because the marker is a single short run with nothing to wrap.
+   It's a real <button> rather than an <a>: it opens a layer, it doesn't
+   navigate, and a button is what a screen reader should announce. */
+.er-ref{
+  all:unset;
+  font-weight:600;
+  font-size:.68em;
+  vertical-align:super;
+  line-height:0;
+  cursor:pointer;
+  /* the marker sits flush against the word it follows ("roughness0042"),
+     so it needs a hair of air on the left only */
+  margin-left:.12em;
+  font-variant-numeric:tabular-nums;
+  transition:opacity .15s;
+}
+.er-ref:hover{opacity:.55;}
+.er-ref:focus-visible{background:var(--ink); color:var(--paper);}
+
+/* ---------- footnote photo layer ----------
+   Full height, flush to the right and bottom screen edges, width purely
+   from the photo's own proportions -- deliberately NOT snapped to the
+   column grid, so the photo reads as an object laid over the page rather
+   than another block in the layout. A landscape photo would run most of
+   the way across the page at full height, so that one case is capped: its
+   width stops at the essay title's own column (see layoutPhotoLayer).
+
+   z-index sits above the sticky topbar (10) so this layer's own Close
+   covers the header's Dark/Close slot exactly, and below the fullscreen
+   viewer (100), which is a different, heavier thing entirely. */
+/* the same shutter every other layer on this site uses, and for the same
+   reason: it has to read as a layer arriving over what's underneath, not as
+   a box materialising. inset(0 0 100% 0) is collapsed against the TOP edge,
+   so opening grows it downward and closing retracts it back upward, leaving
+   the essay it was covering behind it. An opacity fade was what this used
+   to be, and on a phone it read as the photo pinching in from both edges
+   at once rather than a shutter at all. */
+.photolay{
+  position:fixed; inset:0;
+  z-index:50;
+  visibility:hidden;
+  clip-path:inset(0 0 100% 0);
+  transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear .6s;
+}
+.photolay.open{
+  visibility:visible;
+  clip-path:inset(0 0 0% 0);
+  transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear 0s;
+}
+/* phone only: here the photo fills the screen, so whatever shows around it
+   is the essay directly underneath — blurred, the same wash the viewer and
+   the reader itself use, so the stack reads as real layers. The wide tiers
+   deliberately get none of this: there the photo is an object laid into
+   the empty columns beside the text, and the text has to stay readable. */
+.photolay.centered{
+  background:color-mix(in srgb, var(--paper) var(--viewer-bg-pct), transparent);
+  backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+  -webkit-backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+}
+/* the paper rectangle above the photo: it masks the top of the layer so the
+   photo starts on the header's own bottom edge, and carries Close. Same
+   idea as the viewer's own header plate over its film strip. Its width is
+   the photo's, not the screen's, so "House of Walk" and the tagline stay
+   visible beside it -- except in centered mode (see below), where it spans
+   the full width the way the viewer's own header does. Every number here
+   comes from JS: the real header's height, and the photo's own proportions. */
+.photolay-head{
+  position:absolute;
+  top:0; right:0;
+  width:0; height:0;
+  background:var(--paper);
+}
+.photolay-close{
+  position:absolute;
+  /* both offsets are set from JS off the real Dark/Close button's own
+     measured box, so this lands exactly on it at every tier instead of
+     re-deriving the header's padding here and drifting from it */
+  top:0; right:var(--pad);
+  display:block;
+  background:transparent;
+  text-align:right;
+  line-height:1.3;
+}
+.photolay-stage{
+  position:absolute;
+  left:0; top:0;
+  width:0; height:0;
+  overflow:hidden;
+}
+/* .ph brings the loading treatment with it — the blurred cached thumb, the
+   blinds, the tint and the grain, all fading out together once .ph-full
+   lands (see .ph-full.loaded ~ ...). The box is already sized to the
+   photo's exact proportions by then, so .ph's own aspect-ratio would only
+   fight it. */
+.photolay-stage .ph{
+  position:absolute; inset:0;
+  aspect-ratio:auto;
+}
+
+
+/* per-tier column assignment — hand-tuned, not a formula. Title spans from
+   column 1 through wherever the body text column starts (reusing that same
+   line number rather than a separate magic number) so a single long title
+   line always has room (title's own end is wherever the subs column for
+   that tier starts — not given as a separate number, since it's implied).
+   4/5/6-column numbers are still pending — see the 3-column tier below,
+   which IS final: it's the real grid's own fixed mobile column count
+   (.grid goes straight from auto-fill to a hard 3 under 680px, so this is a
+   real tier, not a stand-in for a single-column phone stack). */
+#essayReaderInner[data-cols="3"] .er-title{grid-column:1;}
+#essayReaderInner[data-cols="3"] .er-sub{grid-column:1;}
+#essayReaderInner[data-cols="3"] .er-text{grid-column:2 / 4;}
+/* on the 3-column phone tier the closing paragraph keeps the SAME two
+   columns every other paragraph has. The narrower closing treatment is a
+   wide-screen device -- at this width dropping it to one column just makes
+   the last paragraph a cramped ribbon next to everything above it. */
+#essayReaderInner[data-cols="3"] .er-text-final{grid-column:2 / 4;}
+#essayReaderInner[data-cols="4"] .er-title{grid-column:1 / 2;}
+#essayReaderInner[data-cols="4"] .er-sub{grid-column:2;}
+#essayReaderInner[data-cols="4"] .er-text{grid-column:3 / 5;}
+#essayReaderInner[data-cols="4"] .er-text-final{grid-column:3 / 4;}
+#essayReaderInner[data-cols="5"] .er-title{grid-column:2 / 3;}
+#essayReaderInner[data-cols="5"] .er-sub{grid-column:3;}
+#essayReaderInner[data-cols="5"] .er-text{grid-column:4 / 6;}
+#essayReaderInner[data-cols="5"] .er-text-final{grid-column:4 / 5;}
+#essayReaderInner[data-cols="6"] .er-title{grid-column:2 / 3;}
+#essayReaderInner[data-cols="6"] .er-sub{grid-column:3;}
+#essayReaderInner[data-cols="6"] .er-text{grid-column:4 / 7;}
+#essayReaderInner[data-cols="6"] .er-text-final{grid-column:4 / 6;}
+#essayReaderInner[data-cols="7"] .er-title{grid-column:3 / 4;}
+#essayReaderInner[data-cols="7"] .er-sub{grid-column:4;}
+#essayReaderInner[data-cols="7"] .er-text{grid-column:5 / 8;}
+#essayReaderInner[data-cols="7"] .er-text-final{grid-column:5 / 7;}
+#essayReaderInner[data-cols="8"] .er-title{grid-column:4 / 5;}
+#essayReaderInner[data-cols="8"] .er-sub{grid-column:5;}
+#essayReaderInner[data-cols="8"] .er-text{grid-column:6 / 9;}
+#essayReaderInner[data-cols="8"] .er-text-final{grid-column:6 / 8;}
+#essayReaderInner[data-cols="9"] .er-title{grid-column:4 / 5;}
+#essayReaderInner[data-cols="9"] .er-sub{grid-column:5;}
+#essayReaderInner[data-cols="9"] .er-text{grid-column:6 / 10;}
+#essayReaderInner[data-cols="9"] .er-text-final{grid-column:6 / 8;}
+#essayReaderInner[data-cols="10"] .er-title{grid-column:5 / 6;}
+#essayReaderInner[data-cols="10"] .er-sub{grid-column:6;}
+#essayReaderInner[data-cols="10"] .er-text{grid-column:7 / 11;}
+#essayReaderInner[data-cols="10"] .er-text-final{grid-column:7 / 9;}
+#essayReaderInner[data-cols="11"] .er-title{grid-column:6 / 7;}
+#essayReaderInner[data-cols="11"] .er-sub{grid-column:7;}
+#essayReaderInner[data-cols="11"] .er-text{grid-column:8 / 12;}
+#essayReaderInner[data-cols="11"] .er-text-final{grid-column:8 / 10;}
+#essayReaderInner[data-cols="12"] .er-title{grid-column:5 / 7;}
+#essayReaderInner[data-cols="12"] .er-sub{grid-column:7 / 9;}
+#essayReaderInner[data-cols="12"] .er-text{grid-column:9 / 13;}
+#essayReaderInner[data-cols="12"] .er-text-final{grid-column:9 / 11;}
 
 /* ---------- mobile ---------- */
 @media (max-width:680px){
@@ -1055,83 +1170,6 @@ a{color:inherit;}
      The header's height is set by .word, which is taller than this button
      either way, so nothing else moves. */
   .topbar .theme-toggle{padding:0;}
-  /* essay: title on one line, subheading strictly in the left column with
-     the body text in the wider column beside it (same 1fr/3fr split as
-     desktop — only the outer stacking order changes, not the essay's own
-     internal grid), photo last after all the text. The visual order here
-     comes straight from DOM order now (about-photo was physically moved to
-     the end of the markup) rather than a flex `order` override — desktop is
-     unaffected since its grid-column placement doesn't care about source
-     order either way, and it sidesteps a flex-reorder-vs-scrollable-height
-     edge case some mobile browsers have. */
-  .about-inner{
-    display:flex;
-    flex-direction:column;
-    overflow-y:auto;
-    overscroll-behavior:contain;
-    -webkit-overflow-scrolling:touch;
-    /* closes the essay with the same inset it has on either side, so the
-       photo at the end sits in an even frame instead of a deeper bottom gap */
-    padding-bottom:var(--pad);
-  }
-  /* THE actual reason the photo was invisible: flex items shrink by default
-     when their container isn't tall enough to fit them (flex-shrink:1),
-     and .about-photo — the only child with overflow:hidden, which makes its
-     automatic minimum size 0 instead of content-based — absorbed nearly all
-     of that shrink and rendered at ~0 height. We want these to overflow and
-     scroll, never compress, so opt all three out of shrinking. */
-  .about-label,
-  .about-essay,
-  .about-photo{
-    flex-shrink:0;
-  }
-  .about-photo{
-    /* the photo sits in the same frame as everything else at the bottom of
-       the essay: var(--pad) of air above it and the same below (see
-       .about-inner's padding), matching the side inset exactly. The 14px is
-       .about-inner's own flex row-gap, which is already between these two
-       items and would otherwise add on top of this margin. */
-    margin-top:calc(var(--pad) - 14px);
-  }
-  .about-photo img{
-    height:auto;
-    aspect-ratio:1012/1800; /* the actual hero photo's own ratio: without
-      this the <img> has no intrinsic size until it finishes loading over
-      the network and renders at 0 height until then — easy to mistake for
-      "the photo is missing" if you scroll down before it's loaded. */
-  }
-  .about-label{
-    /* +24px on top of the header clearance aboutInner.style.top already
-       gives every element here */
-    margin-top:24px;
-    text-align:left;
-    margin-bottom:2em;
-  }
-  /* .about-label's <br class="lb"> is desktop-only (see markup): the label
-     sits in a narrow side column there and needs the wrap, but a one-line
-     title reads better here. */
-  .about-label br.lb{display:none;}
-  .about-essay{
-    height:auto;
-    margin-top:0;
-    overflow-y:visible;
-    padding-right:0;
-    /* the essay's own columns are the photo grid's columns here, not the
-       1fr/3fr split the wider tiers use: three equal tracks with the same
-       8px gutter as .grid, so the body text starts exactly on the second
-       card column — the same left edge as "A personal archive" in the
-       header, which alignTagline already pins to that column. The
-       subheading keeps the first column to itself. */
-    grid-template-columns:repeat(3,1fr);
-    column-gap:8px;
-    /* the space between one subheading+text block and the next should read
-       as clearly bigger than the space between paragraphs inside a block
-       (that's .essay-body p's own 1.3em) */
-    row-gap:3.5em;
-  }
-  .about-essay .essay-sub{grid-column:1;}
-  .about-essay .essay-body{grid-column:2 / 4;}
-
   /* footer: a real 3-column grid matching the photo grid, so long lines
      wrap inside their own column instead of overflowing into the next one
      (that overflow was covering "To top" in the third column). Text is
@@ -1261,59 +1299,19 @@ a{color:inherit;}
   </div>
 </div>
 
-<div class="about" id="aboutPage" aria-hidden="true">
+<div class="about essay-reader" id="essayReader" aria-hidden="true">
   <i class="bg-grain" aria-hidden="true"></i>
-  <div class="about-inner" id="aboutInner">
-    <div class="about-label">Essay about <br class="lb">the project</div>
-    <div class="about-essay">
-      <div class="essay-sub">Looking</div>
-      <div class="essay-body">
-        <p>Hi! I&rsquo;m Andrey Ubeyvolk, a conceptual art director working with identity and visual communication.</p>
-        <p>House of Walk is my personal visual archive. A place to keep photographs, stories, trips, and other moments that have become meaningful to me. Not just travel, but a record of the life I live and the way I see it.</p>
-        <p>Most photographs here were taken with a Ricoh GR III. I love its particular way of rendering color, light, details, and atmosphere.</p>
-        <p>For me, photography is a creative practice of paying attention. It takes you away from screens and back into the physical world, into the present moment. When you photograph, you start looking differently. You search for details, unexpected combinations, strange moments, beautiful light. You look around instead of at your phone.</p>
-        <p>I think this is especially valuable for anyone working creatively. The world is infinitely diverse, deep, and constantly changing. It is an endless source of inspiration. Anything can suddenly resonate with you and become a key to an idea waiting to be unlocked.</p>
-        <p>Photography gives me a reason to keep looking. It trains the eye, keeps curiosity active, and turns everyday life into a continuous search for inspiration.</p>
-      </div>
+  <div class="essay-reader-inner" id="essayReaderInner"></div>
+</div>
 
-      <div class="essay-sub">Collecting</div>
-      <div class="essay-body">
-        <p>I have been doing this for a long time. Around eight years ago, before owning a Ricoh, I was already photographing my life and travels with a small film point-and-shoot. The habit stayed.</p>
-        <p>Digital photography simply made it easier and faster to keep collecting. I like being able to return to photographs, organize them, and make small adjustments to color and image.</p>
-        <p>Over time, I accumulated too much material to let it disappear into Stories after twenty-four hours. I wanted these photographs to exist somewhere permanently and remain publicly accessible.</p>
-        <p>So House of Walk became an open archive. A place where photographs can live longer than a single post or Story.</p>
-      </div>
-
-      <div class="essay-sub">Living</div>
-      <div class="essay-body">
-        <p>This is not really a travel blog. There are trips here, but also ordinary days, people, objects, places, and random moments that stayed in my memory.</p>
-        <p>The archive is about lifestyle: where I go, what I notice, what I find beautiful, and how I experience the world.</p>
-        <p>It is also an extension of my work as a conceptual art director and graphic designer. My professional work shows what I create. This project shows more of who I am outside of work: how I live, what I look at, and how I see the world.</p>
-        <p>The things you photograph and the details you notice say something about you. This is my way of leaving those fragments somewhere visible.</p>
-      </div>
-
-      <div class="essay-sub">Making</div>
-      <div class="essay-body">
-        <p>I wanted the website to be minimal, but not empty. The photographs are the focus, while the grid, typography, interactions, hover states, and small details create a deeper layer underneath.</p>
-        <p>Everything is considered, but nothing should compete with the images.</p>
-        <p>I built it very quickly, while the idea was still alive. The whole thing took one day.</p>
-        <p>No Figma. I vibe-coded it with Claude Code.</p>
-        <p>For me, this is part of what a new kind of art direction can look like: having the visual idea, directing it, and building it yourself. Less separation between thinking, designing, and making. Fast, direct, detailed, and very DIY.</p>
-      </div>
-
-      <div class="essay-sub">Walking</div>
-      <div class="essay-body">
-        <p>The name House of Walk started with my pseudonym, Ubeyvolk. It is based on a rare surname, but I use it as a creative name. &ldquo;Volk&rdquo; sounds a little like &ldquo;Walk&rdquo;, which suggested a House of Walk: a house of walking, wandering, travelling, and discovering.</p>
-        <p>&ldquo;House&rdquo; also had several cultural associations for me. My first job in fashion was at Leonid Alekseev&rsquo;s studio, which later became House of Leo. Ballroom culture has its own Houses too: House of Ninja, House of Balenciaga, and many others. And there is Lars von Trier&rsquo;s <em>The House That Jack Built</em>, by one of my favorite directors.</p>
-        <p>These references were never a single source for the name. They were separate pieces of cultural memory that eventually came together with my own meaning: my house, my world, and my way of moving through it.</p>
-        <p>The slightly crooked planet represents the world outside the house. On hover, it turns counterclockwise, like a small gesture towards looking backwards: revisiting photographs, memories, places, and moments that have already happened.</p>
-        <p>This is House of Walk.<br>A small archive of a life in motion.</p>
-      </div>
-    </div>
-    <div class="about-photo">
-      <img src="photos/about/hero.jpg" alt="">
-    </div>
-  </div>
+<!-- a footnote photo, opened from a [0042]/[PHOTO] marker in an essay's own
+     text. Sits over the reader rather than replacing it: the essay keeps
+     reading underneath, and this layer's own Close lands in exactly the slot
+     the header's Dark/Close occupies, so whichever is on top is what closes. -->
+<div class="photolay" id="photoLay" aria-hidden="true">
+  <div class="photolay-head" id="photoLayHead"></div>
+  <div class="photolay-stage" id="photoLayStage"></div>
+  <button class="photolay-close plate-btn" id="photoLayClose" type="button">Close</button>
 </div>
 
 <script>
@@ -1842,6 +1840,158 @@ a{color:inherit;}
     });
   });
 
+  /* essay covers: one per trip, inserted as the trip's own first grid cell
+     (see gridHtml below). Sections are TODO placeholders — swap in the real
+     essay text verbatim, do not paraphrase. */
+  var ESSAYS = {
+    KAS: {
+      title:'Essay on Kaş',
+      subtitle:'a place of heart, soul, and nature',
+      cardLabel:'Essay on Kaş',
+      cover:'photos/essays/kas.webp',
+      coverAr:0.675,
+      sections:[
+        {sub:"Our Village", body:[
+          "Kaş. This is a magical place. Calm. My wife and I call it Our Village. Because Kaş has a population of only around 7,000 people. It really isn't a town but more like a small, peaceful village. A place of heart, peace, and nature. Even though the feelings we lived through there were mixed. There was room for anxiety, stress, and deception too."
+        ]},
+        {sub:"First Visit", body:[
+          "I first visited Kaş in February 2021. Perfect weather for it: sunny, warm, but not hot. You walk around in light spring clothes. Wonderful. Kaş is a four-hour bus ride from Antalya. The first time, it all seems a bit overwhelming: where's the bus station? Which bus? How do you get there? How much does it cost? What's the schedule? But that's fine, just the ordinary questions of travel. Once you figure it out, everything becomes easy."
+        ]},
+        {sub:"On the Road", body:[
+          "The drive is simply WOW. As you leave Antalya, you're already inspired by the nature, the trees, the mountains, the rocks and boulders. Nature in Turkey is incredibly textured. Now it's clear where all those intricate, detail-heavy patterns in Turkish carpets come from. It's a direct consequence of the surrounding nature, its many layers. Bushes arrange themselves into fractals across an endlessly varied landscape. There's no single kind of grass covering everything. Everything is etched with detail, diversity, and roughness[0042]. I love that. I love roughness in visuals, I love a bit of decay, I love natural textures and surfaces. In Asia they have their own version, in Turkey their own. But what they share is that there's no monotony here, unlike, say, Dubai. I'm not a fan of hyper-minimalism at all, I love detail and depth, wanting there to be soul and history in things. In the East, it seems to me, in Japan for example, this shows up as wabi-sabi. In general: nature, the flow of life, aging, realism, fractality creating endless diversity. You can feel intent, and the will of God, in it. There's a uniqueness to it, where everyone in the universe has their own place, yet everything is one at the same time. And in Turkey, with the right mindset and vibe, there's plenty of that.",
+          "And so you move through mountains, hills, switchbacks along the sea. The sharp turns sometimes make you carsick or wear you out, but the beauty is immense. Passing small, poor village houses, you're struck by how simple their life is. You think about what it would be like to live there and not think about the endless race of technology and the singularity that AI is pulling us toward. Here, you sink into yourself and into nature. Like a mirror—through nature into yourself, and back again."
+        ]},
+        {sub:"Life in Town", body:[
+          "The center of Kaş is bustling with life. The main street, packed with cars and mopeds, never feels central or overwhelming. It's wide, sure, compared to all the tiny side streets, but it feels like its own, so flat, people walking back and forth with no traffic lights. There's a light sense of everyone being neighbors with everyone. Delicious shawarma, not the same taste as back home. Or chicken shish with salad—the center has plenty of inexpensive cafés and small canteen-style restaurants where you're fed well and, importantly, healthily. By the way, this was always our classic post-workout meal: rice, chicken kebab, salad, bread, and lentil soup. And of course, classic strong Turkish tea from those small, shapely little glasses.",
+          "It's just a great Turkish style in general—they're always sitting outside at little tables, endlessly smoking and drinking tea from those small Turkish glasses (cups?). It's incredibly stylish. However you feel about smoking, there's something in it that reveals the particular atmosphere of the country, and it's romantically magnetic. I've sat like that myself more than once. When traveling, I sometimes smoke. Always hand-rolled, with original natural tobacco. Never cigarettes."
+        ]},
+        {sub:"Sunset Feelings", body:[
+          "And picture this: you roll yourself a cigarette like a ritual, brew a strong tea, and watch a violet-pink sunset over the sea. Islands and mountains on either side. Breathtaking. In moments like that, you're truly alive, you feel the world and a sense of oneness with it. But just as often, it was the opposite: an endless, crushing stress pressing on your chest. The race for work tasks, approval, deadlines, the desire to do everything perfectly. How many times that happened. Kaş is a small life, where I managed to live through happiness, grief, stress, and joy, all of it. I left the whole spectrum of emotion there, soaked these places in it, gave it away."
+        ]},
+        {sub:"Nature and Color", body:[
+          "I want to emphasize the nature here even more: in Turkey, it's incredibly vivid. I already wrote above about its texture, but it's also rich in color. And what I love is that it's both: subtle shades and half-tones, as well as bright, vivid accents that catch the eye and give it a jolt of energy. The half-tones show up in the range of greens in the bushes. And also in the rocks, cliffs, and boulders—covered in cracks and layered with the most beautiful gradients. This echoes my love for those slightly moldy-looking gradients found in nature. Trees here and there bloom with bright pink or orange flowers. This isn't monotony. It's both depth of tone and the richness of nature's bursts of accent color, all at once. Maximum diversity. But it's not chaos—everything coexists in harmony here. And that's something to learn from: how nature so precisely balances artistic expression, consistency, and aesthetics. God, nature—the ultimate creator and artist. And it's all around us, an endless depth to sink into with no bottom. Everything we know comes from here, from what surrounds us."
+        ]},
+        {sub:"Design Inspiration", body:[
+          "And I tried to carry this over into artistic practice and design too. I even had an idea for a short workshop on drawing inspiration from the surrounding world, from nature. In short, the method was this: photograph nature's patterns, bushes and rocks, textures and thorns. Then turn them into compositional objects, patterns, worn textures, and linear elements. Various filters helped along the way, everything up to Photoshop or tracing. It's creative spontaneity, working with the chaos of chance. You don't know what awaits you outside, what shot you'll end up with, what you'll notice. And even once you have that shot, you don't know how it will turn into something. And that's where the interest lies: there's a sequence of steps, an understanding that something can be made from this, but the result keeps a degree of unpredictability, one you shape into final forms through composition, meaning (expressed through typography), hierarchy, and all the other classic principles of design and visual construction. And these forms aren't from the internet: they carry history, a connection to reality, a moment. They become singular. And at the same time, they're scattered everywhere around you, in the outside world, in reality. This library is available to everyone."
+        ]},
+        {sub:"The Code Within", body:[
+          "I see the world as a matrix of code. Numbers are spinning everywhere. And inside your own head too. And sometimes you touch the outside code, the numbers line up, the sequence of code syncs, and you discover an idea. In Kaş, connected to nature and its mindset that, after all, leans calm, this happens more easily. It's easier to recognize, to look inward and outward at the same time. Easier to start learning to catch these connections between your soul and nature, the outside world."
+        ]},
+        {sub:"Balance", body:[
+          "And speaking of that balance, I want to note that the town itself sits at a point of balance: mountains on one side, the sea and the marina on the other. Wonderful. You feel as though you're in a pause, in a room to catch your breath, in a safe hollow of nature. There's plenty to see here: various little cafés, each with its own particular atmosphere. Restaurants. A marina full of boats. Mosques and a cemetery. Sharp climbs up through the town and equally sharp descents back down.",
+          "We lived within the center of town a few times. Once right in the center, another time a bit up the hill, a third time also in the center but a little up the hill. But our longest stays, of several months each, were up at the top of the town. With a stunning view from the mountain onto the sea, the horizon. Crimson, gradient sunsets almost every evening. A breathtaking sight, and it's available almost every night! Especially if you choose an apartment with big floor-to-ceiling windows—there are plenty of those there. That's a classic of modern Kaş buildings. The important thing is not to grow used to these views, and to stop each time for 10 to 15 minutes while the sun goes down, to just watch. We did that countless times: on the way from home, or on the way to the gym, heading down toward the center. Photos don't capture this view. It's precisely for sunsets like these, among other things, that you need to go there. I've seen similar sunsets in Thailand or Bali. A wild sky ablaze with pink, peach, and scarlet. It almost feels like some kind of simulation, the colors and gradients are so uniquely beautiful. I'm convinced that observing, deliberately focusing your attention on things like this, also trains the eye and the feel for color, for gradient nuances, for choosing the right shade or color combination. I'm sure this has, not least, shaped my own work with gradients and color choices in design and branding. This is the kind of real experience that reality itself gives you, not Pinterest or some online course book. Because here, you learn straight from the source: from nature."
+        ]},
+        {sub:"Height", body:[
+          "In Kaş, you can climb up into the mountains and see the town from a bird's-eye view. A strange detail: up there, at that height, sound just switches off. Silence. You stop hearing the background noise that, it seems, you can never escape in any city, 24/7. There's always noise humming in the background. And here it becomes a contrast: you're stunned by how little you hear. Like a vacuum. Only the sounds you make yourself. Stones shuffling underfoot, the rustle of clothes, your own voice. Your ears feel almost blocked. No sound at all. It's wonderfully strange. On top of that comes a shift in scale, in how you relate to your surroundings and the town. Everything fits in your palm, everything small, blurring into patches. The beauty and scale of the world. Many mornings I went on solo cardio walks up to these peaks, to look at the town from above and come back down. So many times I spoke, out loud, with nature and with God at these heights. Thanking them for this experience, these views."
+        ]},
+        {sub:"Trials", body:[
+          "But alongside all the beauty, we also faced stress and anxiety. People tried to scam us with an apartment rental, we ran into difficulties gathering documents for a residence permit. Then came the rejection of that residence permit. The whole process was stressful and nerve-racking, testing your resilience, your proactiveness, your agency. When you simply don't know what to do next, but something has to be done. When there are no clear solutions available. It's a painful but powerful experience. People, bureaucracy, taking responsibility, calculations, money. The entire spectrum of adult life packed into one small town, into one stretch of life. I also went through enormous work-related stress, burnout, comparing myself to others, self-deprecation and self-flagellation. One evening I had the feeling my heart might just stop. I remember even sitting down mid-walk, that's how bad it was. My nervous system was wrung dry, like a piece of dried fruit. But all of that is behind me now, all of it is experience too. Life includes the whole spectrum of emotions and feelings. And, as I said earlier, you can live a small life in this town. I even experienced, for the first time, what a tremor, an earthquake, feels like. When the ground shifts beneath you. It was a small tremor, at a time when eastern Turkey was hit by severe earthquakes. Only a faint echo reached us. But it was strange, almost surreal. Nature surprises you. I also remember powerful storms, endless lightning flashing like floodlights every 15 seconds. Strong night winds howling in the corners of the house like spirits or demons. The whole spectrum, from beauty and awe to fear and anxiety, showed itself in this town. And it's wonderful."
+        ]},
+        {sub:"The Place of Power", body:[
+          "Kaş is also special for its clear connection to antiquity: the center has preserved many old monuments, an amphitheater, ruins, tombs. Picture it: a hill with a view over the whole town, an ancient temple carved into the rock, giant boulders standing like pedestals. A tree growing alone among these massive stones, I imagined it as the tree from paradise. So many times I've sat here and thought about the meaning of life, about myself, my path. The Place of Power: this hilltop right in the center of town. Make sure to climb up there, feel that energy."
+        ]},
+        {sub:"Sport and Activity", body:[
+          "For those who love sports, I should mention there's a good gym in town. It used to be in a basement, which, by the way, I love for that old-school aesthetic. But now our friend, the owner, has opened a new gym, a full one, packed with equipment. It's not cheap, but the quality is there. The staff keep the place spotless, wiping away every speck of dust. You'll be able to train properly. It's also interesting that, because of the rocky mountain terrain, walking uphill is just something you do all the time here! In general, you want to walk a lot in this town. Even though we'd take a minibus up, we walked often. Almost every time, we'd walk back down on foot, that much is certain."
+        ]},
+        {sub:"Wild Boars", body:[
+          "A peculiar thing about Turkey, and Kaş especially, are the wild boars. In the evenings, they sometimes show up in the little streets or right by the house. At least in our part of town, up at the top, we'd often watch them straight from our balcony. They'd wander around down below, coming out of the bushes. Whole families of them! So funny and sweet! The little piglets running, playing, romping around. And the parents grunting sternly at them now and then! But there were also times, walking down the road toward town, when we found ourselves almost squeezed between boars on both sides. Thank God, though, they're gentle, or at least skittish and not particularly aggressive, and they never touched us, and we always managed to slip through, like some kind of game! Once, our little brother, our dog Joik, saved us. He chased those boars off, even though he's half their size.",
+          "I should also mention that Kaş has plenty for those who like to let loose: lots of bars, nightclubs, and various discos with loud music. Open during tourist season. But I'm not really one for that kind of party, so I tend to notice the details that are more about atmosphere and nature instead."
+        ]},
+        {sub:"Sea and Waves", body:[
+          "I'll admit honestly, I never once swam there. It was always spring or autumn, even though plenty of people swim during those seasons. But as for the water and the sea, I'll say it's very beautiful. There are beaches with small pebbles, and giant rock formations that are fun to sit on and watch the waves. I remember overcast, windy autumn days, when the waves rose several meters high, and we watched, captivated, as they burst against the rocky shore without quite reaching us. How beautiful that is! You feel how alive the world is, how beautiful it is simply on its own terms. In all its diversity and uniqueness. There are no flaws in it. It's exactly as it is."
+        ]},
+        {sub:"Community", body:[
+          "During the period when I lived there for six months, we made a lot of connections. Kaş was a real point of attraction back then. Every week I'd run into someone from the IT or design crowd. Or just acquaintances. Everyone was going to Kaş. We even joked that Kaş had basically become a Russian village, or an IT hub. And it was great. The town is small, and getting to a friend's place was always around a 15-minute walk. We often went to visit each other, smoked hookah, ate well together, talked. Back home, that kind of thing rarely happens, you rarely drag yourself out even when everyone's nearby! But there, in Kaş, the value of connecting and meeting up rises. There's more motivation to get together, because the setting itself invites it, it's different. Networking is on point. And we, too, more than once invited people over, made burgers, drank beer, and unwound. Those were good times."
+        ]},
+        {sub:"Temple of the Heart", body:[
+          "Kaş is a temple of the heart, a place of power, a native, peaceful village that will forever live in my heart, and one we'll always be glad to return to again."
+        ]}
+      ]
+    },
+    /* the site's own About essay, in the exact same shape as a Period's --
+       it used to be hand-written markup with its own grid, its own scroll
+       container and its own per-tier column table, all of which had to be
+       kept in sync with Period's by hand. Now there is one reader, one
+       column table and one set of rules; this is just another essay in it.
+       No trip code is "ABOUT", so it never collides with the cover-card
+       lookup (ESSAYS[f.code.split('_')[0]]) that the grid does. */
+    ABOUT: {
+      title:'Essay on House of Walk',
+      /* opened by the wordmark rather than a cover card, so it has no
+         subtitle and no cover of its own -- renderEssayReader treats both
+         as optional. */
+      photo:{img:'photos/about/hero.jpg', thumb:'photos/about/hero.jpg', ar:1012/1800, alt:'Andrey Ubeyvolk'},
+      sections:[
+        {sub:"Looking", body:[
+          "Hi! I&rsquo;m Andrey Ubeyvolk[PHOTO], a conceptual art director working with identity and visual communication.",
+          "House of Walk is my personal visual archive. A place to keep photographs, stories, trips, and other moments that have become meaningful to me. Not just travel, but a record of the life I live and the way I see it.",
+          "Most photographs here were taken with a Ricoh GR III. I love its particular way of rendering color, light, details, and atmosphere.",
+          "For me, photography is a creative practice of paying attention. It takes you away from screens and back into the physical world, into the present moment. When you photograph, you start looking differently. You search for details, unexpected combinations, strange moments, beautiful light. You look around instead of at your phone.",
+          "I think this is especially valuable for anyone working creatively. The world is infinitely diverse, deep, and constantly changing. It is an endless source of inspiration. Anything can suddenly resonate with you and become a key to an idea waiting to be unlocked.",
+          "Photography gives me a reason to keep looking. It trains the eye, keeps curiosity active, and turns everyday life into a continuous search for inspiration."
+        ]},
+        {sub:"Collecting", body:[
+          "I have been doing this for a long time. Around eight years ago, before owning a Ricoh, I was already photographing my life and travels with a small film point-and-shoot. The habit stayed.",
+          "Digital photography simply made it easier and faster to keep collecting. I like being able to return to photographs, organize them, and make small adjustments to color and image.",
+          "Over time, I accumulated too much material to let it disappear into Stories after twenty-four hours. I wanted these photographs to exist somewhere permanently and remain publicly accessible.",
+          "So House of Walk became an open archive. A place where photographs can live longer than a single post or Story."
+        ]},
+        {sub:"Living", body:[
+          "This is not really a travel blog. There are trips here, but also ordinary days, people, objects, places, and random moments that stayed in my memory.",
+          "The archive is about lifestyle: where I go, what I notice, what I find beautiful, and how I experience the world.",
+          "It is also an extension of my work as a conceptual art director and graphic designer. My professional work shows what I create. This project shows more of who I am outside of work: how I live, what I look at, and how I see the world.",
+          "The things you photograph and the details you notice say something about you. This is my way of leaving those fragments somewhere visible."
+        ]},
+        {sub:"Making", body:[
+          "I wanted the website to be minimal, but not empty. The photographs are the focus, while the grid, typography, interactions, hover states, and small details create a deeper layer underneath.",
+          "Everything is considered, but nothing should compete with the images.",
+          "I built it very quickly, while the idea was still alive. The whole thing took one day.",
+          "No Figma. I vibe-coded it with Claude Code.",
+          "For me, this is part of what a new kind of art direction can look like: having the visual idea, directing it, and building it yourself. Less separation between thinking, designing, and making. Fast, direct, detailed, and very DIY."
+        ]},
+        {sub:"Walking", body:[
+          "The name House of Walk started with my pseudonym, Ubeyvolk. It is based on a rare surname, but I use it as a creative name. &ldquo;Volk&rdquo; sounds a little like &ldquo;Walk&rdquo;, which suggested a House of Walk: a house of walking, wandering, travelling, and discovering.",
+          "&ldquo;House&rdquo; also had several cultural associations for me. My first job in fashion was at Leonid Alekseev&rsquo;s studio, which later became House of Leo. Ballroom culture has its own Houses too: House of Ninja, House of Balenciaga, and many others. And there is Lars von Trier&rsquo;s <em>The House That Jack Built</em>, by one of my favorite directors.",
+          "These references were never a single source for the name. They were separate pieces of cultural memory that eventually came together with my own meaning: my house, my world, and my way of moving through it.",
+          "The slightly crooked planet represents the world outside the house. On hover, it turns counterclockwise, like a small gesture towards looking backwards: revisiting photographs, memories, places, and moments that have already happened.",
+          "This is House of Walk.<br>A small archive of a life in motion."
+        ]}
+      ]
+    }
+  };
+
+  /* ---------- inline photo footnotes ----------
+     A marker in an essay's body text -- [0042] for a photo number inside
+     this essay's own trip, or [PHOTO] for the essay's own portrait --
+     renders as a small semibold superscript, like a footnote, and opens
+     the photo as a layer over the text (see the photo layer in JS below).
+     Unknown markers are dropped rather than rendered as a dead button:
+     better a missing footnote than one that does nothing when tapped. */
+  function frameByEssayNumber(code, num){
+    var prefix = code + '_';
+    for(var i=0;i<ARCHIVE.length;i++){
+      var f = ARCHIVE[i];
+      if(f.code.indexOf(prefix) === 0 && f.code.slice(-4) === num && f.img) return f;
+    }
+    return null;
+  }
+  function essayRefs(text, essay, code){
+    return text.replace(/\[([A-Z0-9]+)\]/g, function(all, token){
+      /* the brackets are part of the mark, not just source syntax -- they
+         read as a reference the way a footnote's own brackets do, and keep
+         a bare number from being mistaken for part of the sentence */
+      if(/^\d{4}$/.test(token)){
+        var frame = frameByEssayNumber(code, token);
+        if(!frame) return '';
+        return '<button type="button" class="er-ref" data-gi="'+frame.gi+'" aria-label="Open photo '+frame.code+'">['+token+']</button>';
+      }
+      if(token === 'PHOTO' && essay.photo){
+        return '<button type="button" class="er-ref" data-essay-photo="1" aria-label="Open photo">[PHOTO]</button>';
+      }
+      return '';
+    });
+  }
+
   /* grid uses the small thumb (cheap to scroll past hundreds of them),
      the fullscreen viewer uses the full-size image */
   function phHtml(f, zoomable, addNoise, useThumb){
@@ -2056,6 +2206,18 @@ a{color:inherit;}
   var grid = document.getElementById('grid');
   var gridHtml = '';
   ARCHIVE.forEach(function(f){
+    /* an essay's cover slots in right before its trip's first photo — keyed
+       off the per-photo code (e.g. "KAS_NOV25_0001") rather than tracking
+       WALKS/wi separately, since the code already encodes both the trip
+       and "this is photo #1 of it" in one string. */
+    var essay = ESSAYS[f.code.split('_')[0]];
+    if(essay && f.seq === 1){
+      gridHtml += '<div class="cell essay-cover" role="button" tabindex="0" data-essay="'+f.code.split('_')[0]+'" '
+        + 'style="--ar:'+essay.coverAr+'">'
+        + '<div class="tag"><span>'+essay.cardLabel+'</span></div>'
+        + '<div class="ph real loaded"><img src="'+essay.cover+'" alt="'+essay.title+': '+essay.subtitle+'" loading="lazy"></div>'
+        + '</div>';
+    }
     gridHtml += '<div class="cell'+(f.land?' land':'')+'" role="button" tabindex="0" data-gi="'+f.gi+'" '
       + 'style="--ar:'+f.ar+'">'
       + '<div class="tag"><span>'+f.code+'</span></div>'
@@ -2215,6 +2377,12 @@ a{color:inherit;}
         if(window.requestIdleCallback) requestIdleCallback(run, {timeout:600});
         setTimeout(run, 600);
       }
+      /* gi → its own grid cell, built once: the queue carries ARCHIVE
+         indices and the sort needs each one's real position on the page. */
+      var cellByGi = {};
+      cells.forEach(function(c){
+        if(c.dataset.gi !== undefined) cellByGi[+c.dataset.gi] = c;
+      });
       function scan(){
         var vh = window.innerHeight || 800;
         var top = window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -2225,6 +2393,12 @@ a{color:inherit;}
         var viewCenter = top + vh/2;
         var addedAny = false;
         cells.forEach(function(c){
+          /* essay cover cards are real grid cells with no archive photo
+             behind them, so they carry no data-gi. Skipping them is not
+             just an optimisation: +undefined is NaN, which passed the
+             prefetched[] check every time and went into the queue, where
+             the sort below then looked up cells[NaN] and threw. */
+          if(c.dataset.gi === undefined) return;
           var t = c.offsetTop, b = t + c.offsetHeight;
           if(b < top || t > bottom) return; /* not on screen or in the runway */
           var gi = +c.dataset.gi;
@@ -2243,7 +2417,13 @@ a{color:inherit;}
            second at most while actively scrolling. */
         if(addedAny){
           queue.sort(function(giA, giB){
-            return Math.abs(cells[giA].offsetTop - viewCenter) - Math.abs(cells[giB].offsetTop - viewCenter);
+            /* gi indexes ARCHIVE, not cells — the two stopped lining up the
+               moment the essay cover cards were inserted into the grid as
+               extra cells of their own. Look each one's real cell up by its
+               own data-gi rather than assuming the positions match. */
+            var ca = cellByGi[giA], cb = cellByGi[giB];
+            if(!ca || !cb) return 0;
+            return Math.abs(ca.offsetTop - viewCenter) - Math.abs(cb.offsetTop - viewCenter);
           });
           idle(pump);
         }
@@ -2501,39 +2681,58 @@ a{color:inherit;}
     alignToColumn(document.querySelector('.tagline'), 1);
   }
 
-  /* ---------- essay columns = the photo grid's columns ----------
-     The grid sizes itself with auto-fill, so how many columns it ends up
-     with depends on the width actually available — which includes whether
-     the browser is spending 10-15px of it on a scrollbar. A media query
-     can't see that, so a breakpoint guessing the count disagreed with the
-     real thing for a band of widths either side of each flip: at exactly
-     860px with a desktop scrollbar the grid was still on four columns while
-     the essay's CSS had already moved to five, which put the body text 80px
-     left of the column it was meant to sit on.
+  /* ---------- essay reader columns ----------
+     Counts the first row's cells by shared offsetTop -- .grid is
+     align-items:start, so the run of equal tops IS the column count, taken
+     straight from the element that decides it rather than from a media
+     query (which can't see whether the browser is currently spending
+     10-15px of the width on a scrollbar, and so guesses wrong at exactly
+     the widths where the count flips). Usable at every width, mobile
+     included: the
+     real grid doesn't taper down to fewer and fewer auto-fill columns as it
+     narrows, it jumps straight to a fixed 3 under 680px (see .grid's own
+     mobile rule), so 3 is a real, final tier here too — not a stand-in for
+     a single-column phone stack. Clamped to [3,12], the full range the
+     reader has hand-tuned tiers for. */
+  function computeEssayReaderCols(){
+    var m = measureRealGridColumns();
+    return m ? m.widths.length : null;
+  }
 
-     Count the first row instead. Cells in one row share an offsetTop
-     (.grid is align-items:start), so the run of equal tops IS the column
-     count, straight from the element that decides it. */
-  function syncEssayColumns(){
-    var root = document.documentElement;
-    if(!tabletViewerQuery.matches){
-      /* mobile fixes its columns in CSS and desktop uses a different essay
-         layout entirely — neither wants these */
-      root.style.removeProperty('--essay-cols');
-      root.style.removeProperty('--essay-inner-cols');
-      return;
-    }
+  /* ---------- essay reader columns: measured, not recomputed ----------
+     An earlier version gave the reader its own repeat(N,1fr) grid, matching
+     the real grid only in COLUMN COUNT and trusting the two independent 1fr
+     computations to land on identical pixel widths. They don't always: two
+     separate elements each dividing "however many px is left over" into N
+     equal 1fr tracks can round the leftover remainder pixel(s) onto
+     different tracks depending on each element's own exact available width,
+     which is one own arithmetic problem removed from the real grid's -- any
+     tiny difference between them (e.g. the real grid living in a normally-
+     scrolling body while the reader's own scroll container has its
+     scrollbar hidden a different way) shows up as drift that gets worse
+     column over column, exactly the kind of bug already hit once before on
+     the sandbox's own grid overlay.
+     Copying the real cells' measured pixel widths verbatim removes the
+     second computation entirely -- there is nothing left to disagree with,
+     because it's the same number. */
+  function measureRealGridColumns(){
     var cells = grid.querySelectorAll('.cell');
-    if(cells.length < 2) return;
+    if(cells.length < 2) return null;
     var firstTop = cells[0].offsetTop;
-    var n = 0;
+    var widths = [];
+    var left = null;
+    var prevRight = null;
+    var gap = 14; /* desktop's own literal gap — fallback only, overwritten below the moment there are 2+ real cells to measure it from */
     for(var i=0;i<cells.length;i++){
       if(cells[i].offsetTop !== firstTop) break;
-      n++;
+      var r = cells[i].getBoundingClientRect();
+      if(left === null) left = r.left;
+      if(prevRight !== null) gap = r.left - prevRight;
+      prevRight = r.right;
+      widths.push(r.width);
     }
-    if(n < 2) return; /* mid-relayout garbage, leave the last good value */
-    root.style.setProperty('--essay-cols', n);
-    root.style.setProperty('--essay-inner-cols', n-1);
+    if(widths.length < 3) return null;
+    return {widths: widths, left: left, gap: gap};
   }
 
   /* ---------- footer columns ----------
@@ -2620,7 +2819,6 @@ a{color:inherit;}
   /* must run after theme-toggle's text is set: its content width affects the
      flex row's space-between distribution, which the tagline offset depends on */
   alignTagline();
-  syncEssayColumns();
   var footerCol1 = document.getElementById('footerCol1');
   var footerCol2 = document.getElementById('footerCol2');
   layoutFooter();
@@ -2702,15 +2900,23 @@ a{color:inherit;}
     };
   })();
 
-  /* ---------- about page: click the wordmark, shutter drops from the header.
-     While open, the Dark/Light button itself becomes Close — same slot,
-     same right edge, no second element stacked underneath it. ---------- */
-  (function(){
-    var aboutPage = document.getElementById('aboutPage');
-    var aboutInner = document.getElementById('aboutInner');
-    var siteWordmark = document.getElementById('siteWordmark');
-    if(!aboutPage || !siteWordmark) return;
 
+  /* ---------- essay reader: cover card click opens a Period's full essay.
+     Modeled on the about-page open/close above, minus the wordmark's planet
+     spin (that's specific to the site wordmark, not this page). ---------- */
+  (function(){
+    var essayReader = document.getElementById('essayReader');
+    var essayReaderInner = document.getElementById('essayReaderInner');
+    if(!essayReader || !essayReaderInner) return;
+
+    var currentEssayCode = null;
+    var currentEssay = null;
+    var siteWordmark = document.getElementById('siteWordmark');
+
+    /* dwell/read-to-end analytics, moved here wholesale from the old
+       standalone About page -- same buckets and the same event names, so
+       the numbers stay comparable across the rebuild. Only the About essay
+       reports them (see openEssay), exactly as before. */
     var essayOpenedAt = 0;
     var essayReadToEnd = false;
     function dwellBucket(ms){
@@ -2722,147 +2928,470 @@ a{color:inherit;}
       return '3min-plus';
     }
 
-    function openAbout(){
-      window.scrollTo(0, 0);
-      /* the essay's columns are the grid's columns, so re-read them at the
-         moment they're about to be looked at — cheap, and it covers anything
-         that changed the grid since the last layout pass */
-      syncEssayColumns();
-      var topbarEl = document.querySelector('.topbar');
-      /* window.scrollTo() updates scrollY synchronously, but the 'scroll'
-         event that updateTopbarCompact() listens for to drop the .compact
-         class is dispatched on a later tick. Measuring topbarH right here,
-         right now, could still catch the header mid-compact (e.g. if the
-         user had scrolled the grid before opening) — a shorter height gets
-         baked into aboutInner's offset, then the header snaps back to full
-         height a moment later and visually crops the essay's top. Force it
-         synchronously instead of waiting for that event. */
-      /* .topbar's padding is itself CSS-transitioned (.3s) — removing
-         .compact and immediately measuring in the same tick can catch the
-         very first frame of that transition (still close to the compact
-         height) rather than the true expanded target, baking a too-small
-         offset into aboutInner and cropping the essay's top. Disable the
-         transition for this one synchronous measurement so the box jumps
-         to its final expanded size instantly, then restore it. */
-      topbarEl.style.transition = 'none';
-      topbarEl.classList.remove('compact');
-      var topbarH = topbarEl.getBoundingClientRect().height;
-      void topbarEl.offsetHeight;
-      topbarEl.style.transition = '';
-      /* +6px clearance: the label/essay columns get nudged up by their own
-         negative margin (compensating for text leading vs the photo's hard
-         edge) — without this gap that nudge pushes them a couple pixels
-         under the opaque sticky header, clipping the caps. */
-      aboutInner.style.top = (topbarH+6)+'px';
-      /* always start the essay fresh from the top, not wherever it was
-         scrolled to the last time it was open */
-      var essayEl = aboutInner.querySelector('.about-essay');
-      if(essayEl) essayEl.scrollTop = 0;
-      aboutPage.classList.add('open');
-      aboutPage.setAttribute('aria-hidden','false');
-      document.body.style.overflow = 'hidden';
-      playWhoosh('open');
+    function renderEssayReader(essay, code){
+      /* subtitle is optional -- a Period's cover card gives it one, the
+         About essay (opened from the wordmark, no cover) has none, and an
+         empty " — " dangling after the title is worse than no subtitle. */
+      var html = '<div class="er-title">'+essay.title
+        + (essay.subtitle ? '<span class="er-subtitle"> — '+essay.subtitle+'</span>' : '')
+        + '</div>';
+      essay.sections.forEach(function(s, i){
+        var row = i + 2;
+        var mt = (i === 0 ? 60 : 40) + 'px';
+        var isLastSection = i === essay.sections.length - 1;
+        var body = s.body.slice();
+        /* the essay's very last paragraph gets a narrower closing treatment
+           (see .er-text-final's per-tier widths in CSS) -- pulled out of the
+           normal .er-text so it can sit in its own, later grid row instead
+           of racing the rest of the section's text for the same row. */
+        var closingPara = isLastSection ? body.pop() : null;
+        var bodyHtml = body.map(function(p){ return '<p>'+essayRefs(p, essay, code)+'</p>'; }).join('');
+        /* the subheading shares a row with whichever text actually sits at
+           the top of this section -- normally that's the first line of
+           .er-text, but when the closing paragraph IS the section's only
+           paragraph (nothing left in .er-text at all), the sub has nothing
+           left on row to sit beside and needs to move down to the closing
+           paragraph's own row instead, or it's left stranded alone above an
+           empty line. */
+        var subRow = bodyHtml ? row : (closingPara ? row + 1 : row);
+        html += '<div class="er-sub" style="grid-row:'+subRow+';margin-top:'+mt+'">'+s.sub+'</div>';
+        if(bodyHtml) html += '<div class="er-text" style="grid-row:'+row+';margin-top:'+mt+'">'+bodyHtml+'</div>';
+        if(closingPara){
+          var closingMt = bodyHtml ? '16px' : mt;
+          html += '<div class="er-text er-text-final" style="grid-row:'+(row+1)+';margin-top:'+closingMt+'"><p>'+essayRefs(closingPara, essay, code)+'</p></div>';
+        }
+      });
+      essayReaderInner.innerHTML = html;
+    }
 
+    /* column count is the ONLY thing that ever varies with width — row
+       numbers and margins are fixed regardless of tier (title is always row
+       1, sections always start at row 2, per the earlier fix that dropped
+       the title down a row at narrow tiers). So resize never needs to touch
+       the DOM at all, just this one attribute/variable — rebuilding the
+       whole innerHTML on every resize tick was the actual cause of the text
+       visibly lagging a beat behind the real grid while dragging the window
+       edge: a full rebuild is slow enough, and resize fires often enough
+       during a drag, that the columns the reader picks can be a tick behind
+       the ones the CSS attribute selector below is already rendering against
+       by the time the rebuild finishes. Updating just the attribute has
+       nothing to lag — the browser repaints the new column assignment on
+       the very next frame, same as the real photo grid re-flowing its own
+       auto-fill columns. */
+    function applyEssayReaderCols(){
+      var m = measureRealGridColumns();
+      if(m === null){
+        essayReaderInner.style.removeProperty('grid-template-columns');
+        essayReaderInner.style.removeProperty('padding-left');
+        essayReaderInner.style.removeProperty('padding-right');
+        essayReaderInner.removeAttribute('data-cols');
+        return;
+      }
+      var n = Math.max(3, Math.min(12, m.widths.length));
+      var widths = m.widths.slice(0, n);
+      /* explicit px tracks, not repeat(n,1fr): a grid with 1fr tracks needs
+         its OWN available width to divide up, which asks this element's
+         width computation to agree with the real grid's, pixel for pixel --
+         exactly the thing that was quietly drifting. Literal widths don't
+         divide anything; the browser just lays out these exact tracks, so
+         there's no leftover-remainder rounding step left to disagree on. */
+      essayReaderInner.style.gridTemplateColumns = widths.map(function(w){ return w.toFixed(2)+'px'; }).join(' ');
+      /* the gap needs copying too, not just the widths: mobile's real .grid
+         uses an 8px column-gap (gap:14px 8px), not the 14px every wider tier
+         uses -- hardcoding 14px here (as an earlier version did) left every
+         column after the first one quietly 6px further right than the real
+         grid's, compounding tier over tier until the text ran past the
+         right padding it was supposed to keep. */
+      essayReaderInner.style.columnGap = m.gap.toFixed(2)+'px';
+      /* padding-left is a single longhand override -- padding-top/bottom
+         keep coming from syncEssayReaderTop / the .essay-reader-inner
+         rule's own 60px, untouched. */
+      essayReaderInner.style.paddingLeft = m.left.toFixed(2)+'px';
+      /* padding-right needs its own override too, once the scrollbar became
+         visible (an earlier version relied on the CSS rule's plain
+         var(--pad) here, which was fine while the scrollbar was hidden and
+         took no layout space at all). The real grid's own measurement above
+         assumes a scrollbar-free box spanning the full viewport width --
+         true for .grid itself (body's scroll is locked shut while this
+         reader is open), but no longer true for this element now that IT
+         has a real, space-taking scrollbar of its own. Without this, the
+         grid's copied total width was always exactly one scrollbar's worth
+         too wide for what's actually left to put it in, which is what the
+         horizontal scrollbar at the bottom actually was. Subtracting the
+         scrollbar's own measured width from the padding — rather than
+         shrinking the grid — keeps the scrollbar sitting inside the normal
+         var(--pad) margin instead of cutting into real column space. */
+      var scrollbarW = essayReaderInner.offsetWidth - essayReaderInner.clientWidth;
+      essayReaderInner.style.paddingRight = 'calc(var(--pad) - '+scrollbarW+'px)';
+      essayReaderInner.setAttribute('data-cols', n);
+    }
+
+    /* same idea as the column-width copy above: the title's top should land
+       exactly where the real grid's own card tags sit, not at some guessed
+       offset below the header that happens to look close.
+       This is now split across two properties instead of one: the box's
+       own top is moved down to the header's real bottom edge (so the native
+       scrollbar riding this box's edge starts there too, instead of running
+       the full viewport height with its top few pixels hidden under the
+       opaque sticky header) -- then padding-top makes up only whatever's
+       left between that and the tag row, so the title itself still lands on
+       the exact same line regardless of how tall the header currently is
+       (compact state, font metrics, mobile). */
+    function syncEssayReaderTop(){
+      var topbarEl = document.querySelector('.topbar');
+      var headerBottom = topbarEl.getBoundingClientRect().bottom;
+      essayReaderInner.style.top = headerBottom + 'px';
+      var firstTag = grid.querySelector('.tag');
+      if(firstTag){
+        var gap = firstTag.getBoundingClientRect().top - headerBottom;
+        essayReaderInner.style.paddingTop = Math.max(0, gap) + 'px';
+        return;
+      }
+      essayReaderInner.style.paddingTop = '40px';
+    }
+
+    function refreshEssayReader(){
+      if(!currentEssayCode) return;
+      syncEssayReaderTop();
+      applyEssayReaderCols();
+    }
+
+    function openEssay(code){
+      var essay = ESSAYS[code];
+      if(!essay) return;
+      var wasOpen = essayReader.classList.contains('open');
+      /* going from one essay straight into another (the wordmark, while a
+         Period is up) still arrives as a shutter, not a silent swap of the
+         text underneath you. Without this the new essay simply appeared in
+         place, which read as a glitch rather than a move -- especially with
+         a footnote photo open over the old one. Snapping .open off with
+         transitions disabled, forcing a reflow, then putting it back gives
+         the drop a real starting point to animate from again. */
+      var changingEssay = wasOpen && currentEssayCode !== code;
+      closePhotoLayer(true);
+      window.scrollTo(0, 0);
+      currentEssayCode = code;
+      currentEssay = essay;
+      syncEssayReaderTop();
+      renderEssayReader(essay, code);
+      applyEssayReaderCols();
+      essayReaderInner.scrollTop = 0;
+      if(changingEssay){
+        essayReader.style.transition = 'none';
+        essayReader.classList.remove('open');
+        void essayReader.offsetHeight;
+        essayReader.style.transition = '';
+      }
+      essayReader.classList.add('open');
+      essayReader.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden';
+      if(!wasOpen || changingEssay) playWhoosh('open');
+      gcEvent('essay-reader/open/'+code, 'Essay reader opened: '+code);
+
+      /* the About essay is the one opened from the wordmark rather than a
+         cover card, so it alone keeps the wordmark's planet spinning for as
+         long as it's open (and its own analytics events, which predate the
+         reader and are worth keeping comparable across the change). */
+      if(code === 'ABOUT'){
+        siteWordmark.classList.add('planet-out');
+        planetSpin.forceStart();
+        essayOpenedAt = Date.now();
+        essayReadToEnd = false;
+        gcEvent('essay/open', 'Essay opened');
+      }
+
+      /* same slot, same right edge as About's own hijack of this button —
+         two separate close buttons stacked on the real header's Dark/Light
+         toggle is what actually happens without this: this one at a lower
+         z-index than the sticky header (10) would just render invisibly
+         underneath it. */
       themeToggle.removeEventListener('click', onThemeToggleClick);
       themeToggle.textContent = 'Close';
-      themeToggle.addEventListener('click', closeAbout);
-      /* Dark/Close are different lengths, so the toggle's content width
-         changes — that shifts the topbar's space-between distribution,
-         which the tagline offset was measured against. */
+      themeToggle.addEventListener('click', closeEssay);
       alignTagline();
-      /* a separate class from .force-expanded: that one is toggled on/off
-         synchronously (with transitions disabled) purely to measure .word's
-         widest footprint in lockWordWidth, and could run at any time while
-         About is open (on resize, refocus, etc) — reusing it here would let
-         that measurement pass's own cleanup step rip the planet back in
-         mid-essay. */
-      siteWordmark.classList.add('planet-out');
-      /* keeps turning for as long as the essay stays open, independent of
-         hover — see planetSpin's own comment for why this isn't just the
-         mouseenter/mouseleave pair every other reveal of it uses. */
-      planetSpin.forceStart();
-
-      essayOpenedAt = Date.now();
-      essayReadToEnd = false;
-      gcEvent('essay/open', 'Essay opened');
     }
-    function closeAbout(){
-      aboutPage.classList.remove('open');
-      aboutPage.setAttribute('aria-hidden','true');
-      siteWordmark.classList.remove('planet-out');
-      planetSpin.forceStop();
-      playWhoosh('close');
-      setTimeout(function(){
-        document.body.style.overflow = '';
-      }, 620);
+    function closeEssay(silent){
+      essayReader.classList.remove('open');
+      essayReader.setAttribute('aria-hidden','true');
+      closePhotoLayer(true); /* a footnote photo left open over the text has nothing to sit over once the reader goes */
+      if(currentEssayCode === 'ABOUT'){
+        siteWordmark.classList.remove('planet-out');
+        planetSpin.forceStop();
+        if(essayOpenedAt){
+          var bucket = dwellBucket(Date.now() - essayOpenedAt);
+          gcEvent('essay/dwell/'+bucket, 'Essay dwell time: '+bucket);
+          if(essayReadToEnd) gcEvent('essay/read-to-end', 'Essay scrolled to the end');
+          essayOpenedAt = 0;
+        }
+      }
+      /* silent===true only from a cross-overlay handoff (About or the
+         viewer taking over while Period was still open) -- both cases lock
+         body scroll again themselves within the same tick, so the usual
+         whoosh AND the delayed overflow-release both have to skip too, or
+         the release fires 620ms later and unlocks scroll out from under
+         whichever overlay is actually open by then. A real close still
+         gets both. */
+      if(silent !== true){
+        playWhoosh('close');
+        setTimeout(function(){
+          document.body.style.overflow = '';
+        }, 620);
+      }
 
-      themeToggle.removeEventListener('click', closeAbout);
+      themeToggle.removeEventListener('click', closeEssay);
       themeToggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light' : 'Dark';
       themeToggle.addEventListener('click', onThemeToggleClick);
       alignTagline();
+    }
+    /* ---------- footnote photo layer ----------
+       Opened by a [0042]/[PHOTO] marker in the essay's own text. Deliberately
+       NOT the fullscreen film-strip viewer: that one replaces the page and
+       scrolls through a whole trip, whereas this is one photo laid over the
+       essay you're still reading. */
+    var photoLay = document.getElementById('photoLay');
+    var photoLayHead = document.getElementById('photoLayHead');
+    var photoLayStage = document.getElementById('photoLayStage');
+    var photoLayCloseBtn = document.getElementById('photoLayClose');
+    var photoLayFrame = null;
+    var photoLayCentered = false;
+    /* iPad Pro and narrower. At 5 columns and below the text has already
+       eaten the width a photo could be laid into beside it, so the side
+       layer stops making sense there -- see the click handler, which routes
+       those tiers to the normal full-screen carousel instead, and this
+       centered fallback for the one photo that isn't in the archive at all
+       (the portrait in the About essay, which the carousel has no frame
+       for). */
+    var SIDE_LAYER_MIN_COLS = 6;
 
-      if(essayOpenedAt){
-        var bucket = dwellBucket(Date.now() - essayOpenedAt);
-        gcEvent('essay/dwell/'+bucket, 'Essay dwell time: '+bucket);
-        if(essayReadToEnd) gcEvent('essay/read-to-end', 'Essay scrolled to the end');
-        essayOpenedAt = 0;
+    /* the glyph box of an element's own text, which is what actually has to
+       line up between two buttons -- their border boxes can sit at the same
+       coordinates while the words inside them don't, once padding or font
+       metrics differ. Returns null for anything with no text to measure. */
+    function textBox(el){
+      if(!el || !el.firstChild) return null;
+      var r = document.createRange();
+      r.selectNodeContents(el);
+      var b = r.getBoundingClientRect();
+      if(!b.width && !b.height) return null;
+      return b;
+    }
+
+    /* the photo is sized off its own proportions at full height, flush to
+       the right and bottom edges -- no grid snapping at all, which is the
+       point: it reads as an object laid over the page. The exception is a
+       landscape photo, which at full height would run most of the way
+       across: that one gets its width capped at the essay title's own
+       column and takes its height from there instead. */
+    function layoutPhotoLayer(){
+      if(!photoLay || !photoLayFrame || !photoLay.classList.contains('open')) return;
+      var topbarEl = document.querySelector('.topbar');
+      var headBottom = topbarEl.getBoundingClientRect().bottom;
+      var vw = document.documentElement.clientWidth;
+      var availH = Math.max(0, window.innerHeight - headBottom);
+      var ar = photoLayFrame.ar || (2/3);
+      var w = availH * ar;
+      var h = availH;
+      var maxW;
+      if(photoLayCentered){
+        /* phone: nothing to sit beside, so the photo runs edge to edge the
+           way an opened photo does everywhere else on a phone -- no page
+           margin, no grid. Whatever height is left over around it shows the
+           essay underneath, blurred (see .photolay.centered in CSS). */
+        maxW = vw;
+      } else {
+        var titleEl = essayReaderInner.querySelector('.er-title');
+        /* the title's own box starts at its column's left edge even though
+           its text is nowrap and may visually overhang -- that edge is the
+           cap the landscape case is measured against. */
+        var capLeft = titleEl ? titleEl.getBoundingClientRect().left : 0;
+        maxW = Math.max(0, vw - capLeft);
+      }
+      if(w > maxW && ar > 0){ w = maxW; h = w / ar; }
+      /* the photo's right edge lands on the text block's own right edge --
+         the same line Close and the last text column already sit on --
+         rather than running flush to the screen. Measured off .er-text so
+         it's the real column edge, not a second guess at var(--pad). */
+      var textEl = essayReaderInner.querySelector('.er-text');
+      var rightEdge = textEl ? textEl.getBoundingClientRect().right : vw;
+      var left = photoLayCentered ? (vw - w)/2 : (rightEdge - w);
+      /* the head spans the photo normally, so the wordmark stays visible
+         beside it -- but the full width when centered, where there's no
+         "beside" left and it should read as the viewer's own header does. */
+      photoLayHead.style.width = (photoLayCentered ? vw : w) + 'px';
+      photoLayHead.style.right = (photoLayCentered ? 0 : (vw - rightEdge)) + 'px';
+      photoLayHead.style.height = headBottom + 'px';
+      photoLayStage.style.left = left + 'px';
+      photoLayStage.style.top = headBottom + 'px';
+      photoLayStage.style.width = w + 'px';
+      photoLayStage.style.height = h + 'px';
+      /* land Close exactly on the real Dark/Close button underneath it --
+         matched on the TEXT, not the boxes. Matching boxes was the bug: the
+         header's own toggle carries padding:2px 0 and this one doesn't, so
+         two boxes at the same top put their words 2px apart, and closing the
+         photo made Close visibly hop. Position off the box first, then
+         measure both glyph boxes and correct the remainder, which absorbs
+         that padding and any font-metric difference in one step. */
+      var tRect = themeToggle.getBoundingClientRect();
+      photoLayCloseBtn.style.top = tRect.top + 'px';
+      photoLayCloseBtn.style.right = Math.max(0, vw - tRect.right) + 'px';
+      var toggleText = textBox(themeToggle);
+      var closeText = textBox(photoLayCloseBtn);
+      if(toggleText && closeText){
+        var dTop = toggleText.top - closeText.top;
+        var dRight = toggleText.right - closeText.right;
+        if(isFinite(dTop) && dTop) photoLayCloseBtn.style.top = (tRect.top + dTop) + 'px';
+        if(isFinite(dRight) && dRight) photoLayCloseBtn.style.right = Math.max(0, vw - tRect.right - dRight) + 'px';
       }
     }
-    siteWordmark.addEventListener('click', function(){
-      if(aboutPage.classList.contains('open')){ closeAbout(); }
-      else { openAbout(); }
-    });
+
+    function openPhotoLayer(frame, centered){
+      if(!photoLay || !frame || !frame.img) return;
+      photoLayFrame = frame;
+      photoLayCentered = !!centered;
+      /* on a wide screen this Close sits directly on top of the reader's
+         OWN Close, one layer down -- two identical words stacked, where
+         only the top one is live. Naming it for what it actually closes
+         removes the guess. On a phone the photo fills the screen and
+         there's nothing to confuse it with, so the plain word is better
+         there (and "Close photo" would crowd the small header). */
+      photoLayCloseBtn.textContent = mobileQuery.matches ? 'Close' : 'Close photo';
+      photoLay.classList.toggle('centered', photoLayCentered);
+      /* same markup the viewer builds, so the loading state is the same one
+         the rest of the site uses: the cached thumb blurred behind slats and
+         a tint, with the full-res file fading in over it once it lands. */
+      photoLayStage.innerHTML = phHtml(frame, false, false, false);
+      var full = photoLayStage.querySelector('.ph-full');
+      if(full){
+        /* this photo is the only thing being asked for right now, so it has
+           no reason to queue behind the grid's lazy thumbnails */
+        full.setAttribute('fetchpriority','high');
+        full.setAttribute('loading','eager');
+        if(full.complete && full.naturalWidth){ full.classList.add('loaded'); }
+        else full.addEventListener('load', function(){ full.classList.add('loaded'); }, {once:true});
+      }
+      photoLay.classList.add('open');
+      photoLay.setAttribute('aria-hidden','false');
+      layoutPhotoLayer();
+      playWhoosh('open');
+      gcEvent('essay-photo/open', 'Essay footnote photo opened');
+    }
+
+    function closePhotoLayer(silent){
+      if(!photoLay || !photoLay.classList.contains('open')) return;
+      photoLay.classList.remove('open');
+      photoLay.setAttribute('aria-hidden','true');
+      photoLayFrame = null;
+      if(silent !== true) playWhoosh('close');
+      /* clear the markup only once the shutter has actually finished
+         retracting -- wiping it in the same tick blanks the photo out
+         instead of letting it ride up behind the shutter. Matches the .6s
+         clip-path transition, with a little slack. */
+      setTimeout(function(){
+        if(photoLay && !photoLay.classList.contains('open')) photoLayStage.innerHTML = '';
+      }, 620);
+    }
+
+    if(photoLay){
+      photoLayCloseBtn.addEventListener('click', function(){ closePhotoLayer(); });
+      /* clicking the page beside the photo closes it too, the same
+         click-outside-to-close the fullscreen viewer already has */
+      photoLay.addEventListener('click', function(e){
+        if(e.target === photoLay || e.target === photoLayHead) closePhotoLayer();
+      });
+      essayReaderInner.addEventListener('click', function(e){
+        var ref = e.target && e.target.closest ? e.target.closest('.er-ref') : null;
+        if(!ref) return;
+        e.preventDefault();
+        var cols = parseInt(essayReaderInner.getAttribute('data-cols'), 10) || 12;
+        var sideLayer = cols >= SIDE_LAYER_MIN_COLS;
+        if(ref.hasAttribute('data-essay-photo')){
+          /* the About portrait isn't in the archive, so there's no carousel
+             frame to hand it to -- it always opens as this layer. Only a
+             PHONE gets the centered, full-bleed treatment; an iPad Pro at 5
+             columns still has room beside the text, so it keeps the
+             desktop's right-hand column exactly like the wider tiers. */
+          if(currentEssay && currentEssay.photo) openPhotoLayer(currentEssay.photo, mobileQuery.matches);
+          return;
+        }
+        var gi = parseInt(ref.getAttribute('data-gi'), 10);
+        if(isNaN(gi) || !ARCHIVE[gi]) return;
+        /* an archive photo on iPad Pro and narrower opens the way every
+           other photo on the site does at that size: the full-screen
+           carousel, which hands the reader back to this exact scroll
+           position when it closes (see openViewerFromEssay/closeViewer). */
+        if(!sideLayer && window.openViewerFromEssay){
+          window.openViewerFromEssay(gi, currentEssayCode);
+          return;
+        }
+        openPhotoLayer(ARCHIVE[gi], false);
+      });
+    }
+
+    /* the wordmark opens the site's own essay. It used to be a whole second
+       overlay with its own markup, grid, scroll container and per-tier
+       column table, stacked at a lower z-index than this one -- which is
+       why clicking it while a Period was open needed a shutter handoff
+       between the two. There is only one reader now, so this is either a
+       plain open or a content swap inside the reader that's already up. */
+    if(siteWordmark){
+      siteWordmark.addEventListener('click', function(){
+        if(essayReader.classList.contains('open') && currentEssayCode === 'ABOUT'){
+          closeEssay();
+          return;
+        }
+        openEssay('ABOUT');
+      });
+    }
+
+    window.openEssay = openEssay;
+    window.closeEssay = closeEssay;
+    /* a footnote photo on the narrow tiers opens the full-screen carousel.
+       The reader deliberately stays OPEN underneath rather than being
+       closed first: the viewer's own translucent wash then blurs the essay
+       you were actually reading, not the grid on the home page behind it.
+       That's the whole point -- real layers, each one sitting on the thing
+       it came from. It also means there's nothing to restore on the way
+       back: the reader is still there, still scrolled exactly where it was
+       (see closeViewer, which now only has to leave it alone). */
+    window.openViewerFromEssay = function(gi, code){
+      viewerOpenedFromEssay = {code: code || currentEssayCode, scrollTop: essayReaderInner.scrollTop};
+      openViewer(gi);
+    };
+
     document.addEventListener('keydown', function(e){
-      if(e.key === 'Escape' && aboutPage.classList.contains('open')) closeAbout();
+      if(e.key !== 'Escape') return;
+      /* the photo layer is the topmost thing open, so it's what Escape
+         closes -- same rule its Close button follows against the header's
+         own Close underneath it */
+      if(photoLay && photoLay.classList.contains('open')){ closePhotoLayer(); return; }
+      if(essayReader.classList.contains('open')) closeEssay();
     });
     window.addEventListener('resize', function(){
-      if(aboutPage.classList.contains('open')){
-        aboutInner.style.top = (document.querySelector('.topbar').getBoundingClientRect().height+6)+'px';
-      }
+      if(!essayReader.classList.contains('open')) return;
+      refreshEssayReader();
+      layoutPhotoLayer();
     });
 
-    /* essay's own scroll needs its own boundary-aware tick: the global wheel
-       handler measures window.scrollY, which is frozen at 0 the whole time
-       About is open (body scroll is locked), so it would read every upward
-       scroll as "already at the top" and never make a sound going up. */
-    var aboutEssay = document.querySelector('.about-essay');
-    if(aboutEssay){
-      var essayTickGate = makeTickGate(64);
-      aboutEssay.addEventListener('wheel', function(e){
-        if(mobileQuery.matches) return; /* .about-essay doesn't scroll itself on mobile — .about-inner does, see below */
-        var max = aboutEssay.scrollHeight - aboutEssay.clientHeight;
-        var movingDown = e.deltaY > 0;
-        var atBoundary = movingDown ? (aboutEssay.scrollTop >= max - 0.5) : (aboutEssay.scrollTop <= 0.5);
-        if(!atBoundary && essayTickGate.check(aboutEssay.scrollTop)) playTick();
-      }, {passive:true});
-    }
-    /* on mobile the whole panel (photo + label + essay, stacked) scrolls as
-       one unit instead of the essay having its own inner scroll region.
-       'scroll' rather than 'wheel' here — a touch swipe never fires 'wheel'
-       at all (see the filmrow/window listeners elsewhere), so this was
-       silently dead on every real phone despite working under a mouse.
-       'scroll' carries no deltaY, so direction comes from comparing against
-       the previous position instead of the event itself. */
-    var aboutInnerTickGate = makeTickGate(64);
-    var aboutInnerLastY = null;
-    aboutInner.addEventListener('scroll', function(){
-      if(!mobileQuery.matches) return;
-      var y = aboutInner.scrollTop;
-      var max = aboutInner.scrollHeight - aboutInner.clientHeight;
-      var movingDown = aboutInnerLastY === null ? true : (y > aboutInnerLastY);
-      aboutInnerLastY = y;
+    /* same soft tick on scroll as everywhere else on the site (the main
+       grid, .about-essay/.about-inner) — one shared gate size (64px) so it
+       reads as the same sound, not a different instrument for this one
+       page. 'scroll' rather than 'wheel'+'scroll' split: unlike the about
+       page, this reader uses ONE scroll container on every tier, desktop
+       and mobile alike, and 'scroll' alone already covers wheel, touch, and
+       keyboard input without needing a separate deltaY-based listener. */
+    var essayTickGate = makeTickGate(64);
+    var essayLastY = null;
+    essayReaderInner.addEventListener('scroll', function(){
+      var y = essayReaderInner.scrollTop;
+      var max = essayReaderInner.scrollHeight - essayReaderInner.clientHeight;
+      var movingDown = essayLastY === null ? true : (y > essayLastY);
+      essayLastY = y;
       var atBoundary = movingDown ? (y >= max - 0.5) : (y <= 0.5);
-      if(!atBoundary && aboutInnerTickGate.check(y)) playTick();
+      if(!atBoundary && essayTickGate.check(y)) playTick();
+      /* read-to-end, moved over from the old About page along with the rest
+         of its analytics -- one reader now, so one place that reports it */
+      if(max - y < 4) essayReadToEnd = true;
     }, {passive:true});
-
-    /* 'scroll' rather than 'wheel' here on purpose: touch swipe never fires
-       wheel events at all, so a wheel-only check would miss every mobile
-       reader who actually scrolled to the end with their thumb. */
-    function checkReadToEnd(el){
-      if(el.scrollHeight - el.clientHeight - el.scrollTop < 4) essayReadToEnd = true;
-    }
-    if(aboutEssay) aboutEssay.addEventListener('scroll', function(){ checkReadToEnd(aboutEssay); }, {passive:true});
-    aboutInner.addEventListener('scroll', function(){ checkReadToEnd(aboutInner); }, {passive:true});
   })();
 
   /* ---------- soft lerp scroller ---------- */
@@ -2920,7 +3449,7 @@ a{color:inherit;}
      page has actually moved rather than how many wheel events it took to
      get there. See that listener for why. */
   window.addEventListener('wheel', function(e){
-    var aboutIsOpen = document.getElementById('aboutPage').classList.contains('open');
+    var aboutIsOpen = document.getElementById('essayReader').classList.contains('open');
     if(!viewer.classList.contains('open') && !aboutIsOpen){
       vLerp.stop();
     }
@@ -2932,7 +3461,7 @@ a{color:inherit;}
      there) had nothing to cancel it the moment a reader's own thumb took
      over, and fought the real scroll until it finished converging. */
   window.addEventListener('touchstart', function(){
-    var aboutIsOpen = document.getElementById('aboutPage').classList.contains('open');
+    var aboutIsOpen = document.getElementById('essayReader').classList.contains('open');
     if(!viewer.classList.contains('open') && !aboutIsOpen){
       vLerp.stop();
     }
@@ -2984,7 +3513,7 @@ a{color:inherit;}
        rather than just bailing out, or the first genuine scroll afterwards
        would inherit all that skipped travel and tick immediately. */
     if(viewer.classList.contains('open')
-       || document.getElementById('aboutPage').classList.contains('open')){
+       || document.getElementById('essayReader').classList.contains('open')){
       pageTickGate.reset(y);
       return;
     }
@@ -3354,6 +3883,13 @@ a{color:inherit;}
     gridSyncDebounce = setTimeout(prefetchAroundCurrent, 100);
   }
 
+  /* set only by window.openViewerFromEssay (essay-reader IIFE, below) --
+     lets closeViewer know to hand the reader back to the Period essay it
+     was actually opened from, at the exact scroll position it was at,
+     instead of dumping them on the bare grid the way a viewer opened from
+     a grid card normally does. */
+  var viewerOpenedFromEssay = null;
+
   function openViewer(gi){
     buildViewer();
     /* document.documentElement.scrollHeight collapses down to just
@@ -3453,6 +3989,15 @@ a{color:inherit;}
   }
 
   function closeViewer(){
+    /* a photo opened from a Period footnote link doesn't return to the bare
+       grid like every other viewer close does -- it hands the reader back
+       to the essay they were actually reading, at the exact line they left,
+       via the same silent (no whoosh of its own) handoff openViewerFromEssay
+       used going the other way. Grabbed and cleared up front so the normal
+       close logic below (grid-scroll sync included) still runs unconditionally
+       either way -- this only decides what happens after it. */
+    var essayToReturnTo = viewerOpenedFromEssay;
+    viewerOpenedFromEssay = null;
     /* the only time the background grid actually moves — a single hard
        jump to wherever the reader ended up swiping to, fired the instant
        the closing shutter starts covering the screen so there's nothing
@@ -3468,6 +4013,15 @@ a{color:inherit;}
     vLerp.stop();
     viewer.classList.remove('open');
     viewer.setAttribute('aria-hidden','true');
+    if(essayToReturnTo){
+      /* the reader was never closed on the way in -- it has been sitting
+         underneath this whole time, still scrolled exactly where it was, so
+         there is nothing to reopen or restore. Only two things must NOT
+         happen: body scroll must stay locked (that overlay is still up), and
+         no scrollTop write, which would only fight what's already correct. */
+      playWhoosh('close');
+      return;
+    }
     playWhoosh('close');
     setTimeout(function(){
       document.body.style.overflow = '';
@@ -3477,6 +4031,16 @@ a{color:inherit;}
   grid.addEventListener('click', function(e){
     var cell = e.target.closest('.cell');
     if(!cell) return;
+    if(cell.dataset.essay){
+      /* the tilted cover straightens on the way out, so the tap gets the
+         same acknowledgement a hover gives it on desktop. Cleared once the
+         reader's shutter is fully down and the card can't be seen -- it
+         has to be back on its tilt before it's ever revealed again. */
+      cell.classList.add('tapped');
+      setTimeout(function(){ cell.classList.remove('tapped'); }, 700);
+      openEssay(cell.dataset.essay);
+      return;
+    }
     openViewer(parseInt(cell.dataset.gi,10));
   });
   grid.addEventListener('keydown', function(e){
@@ -3484,6 +4048,7 @@ a{color:inherit;}
     var cell = e.target.closest('.cell');
     if(!cell) return;
     e.preventDefault();
+    if(cell.dataset.essay){ openEssay(cell.dataset.essay); return; }
     openViewer(parseInt(cell.dataset.gi,10));
   });
 
@@ -3549,7 +4114,6 @@ a{color:inherit;}
       lockWordWidth();
       layoutFooter();
       alignTagline();
-      syncEssayColumns();
       sizeTagFont();
     }, 120);
   });
@@ -3634,7 +4198,6 @@ a{color:inherit;}
     lockWordWidth();
     layoutFooter();
     alignTagline();
-    syncEssayColumns();
     sizeTagFont();
     syncViewerHeadMetrics(); /* header height moves with the font metrics */
     if(built) layoutFrames();
