@@ -836,18 +836,27 @@ a{color:inherit;}
    a 400 weight, so a heavier weight here is the browser's own synthetic
    bold, which several mobile browsers apply weakly or not at all -- a solid
    background isn't relying on that at all, so it reads as emphasized
-   everywhere. vertical-align:super on its own would grow the line box and
-   open a visible gap between this paragraph's lines and every other one --
-   line-height:0 on the raised box is the standard fix, and it works here
-   because the marker is a single short run with nothing to wrap. It's a
-   real <button> rather than an <a>: it opens a layer, it doesn't navigate,
-   and a button is what a screen reader should announce. */
+   everywhere. It's a real <button> rather than an <a>: it opens a layer, it
+   doesn't navigate, and a button is what a screen reader should announce.
+
+   display:inline-block (buttons reset to plain inline under all:unset) with
+   its own small line-height, not line-height:0 -- that was the actual cause
+   of the chip painting as a thin sliver instead of wrapping the glyphs: on
+   an inline (non-block) box, the background only ever fills the box's own
+   line-height, and a line-height of 0 collapses that to just the vertical
+   padding, letting the glyphs themselves render OUTSIDE the painted area
+   instead of inside it. An inline-block gets a real content box sized by
+   its own line-height, so the chip actually wraps its own text -- and at
+   1.15 that box (~10px here) still comes out shorter than the surrounding
+   paragraph's own line-height (18.4px at the same tier), so it doesn't
+   grow the gap between this paragraph's lines and any other one either. */
 .er-ref{
   all:unset;
+  display:inline-block;
   font-weight:700;
   font-size:.68em;
+  line-height:1.15;
   vertical-align:super;
-  line-height:0;
   cursor:pointer;
   background:var(--ink);
   color:var(--paper);
@@ -3055,13 +3064,23 @@ a{color:inherit;}
       var topbarEl = document.querySelector('.topbar');
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
       essayReaderInner.style.top = headerBottom + 'px';
+      /* matching the real grid's own header-to-tag gap is what makes the
+         title land exactly on the same line as the grid's card codes on
+         wider tiers -- but on mobile the cards pack in only 14px below the
+         header, which read as the title sitting stuck to it with no
+         breathing room at all. There's no grid alignment worth preserving
+         on this tier anyway (the reader's own 3-column layout doesn't
+         otherwise line up with anything), so it gets the same floor as the
+         gap between sections just below it (40px) instead of whatever the
+         grid happens to leave. */
+      var minGap = mobileQuery.matches ? 40 : 0;
       var firstTag = grid.querySelector('.tag');
       if(firstTag){
         var gap = firstTag.getBoundingClientRect().top - headerBottom;
-        essayReaderInner.style.paddingTop = Math.max(0, gap) + 'px';
+        essayReaderInner.style.paddingTop = Math.max(minGap, gap) + 'px';
         return;
       }
-      essayReaderInner.style.paddingTop = '40px';
+      essayReaderInner.style.paddingTop = Math.max(minGap, 40) + 'px';
     }
 
     function refreshEssayReader(){
