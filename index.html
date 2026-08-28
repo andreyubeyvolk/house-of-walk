@@ -1893,7 +1893,7 @@ a{color:inherit;}
           "And so you move through mountains, hills, switchbacks along the sea. The sharp turns sometimes make you carsick or wear you out, but the beauty is immense. Passing small, poor village houses, you're struck by how simple their life is. You think about what it would be like to live there and not think about the endless race of technology and the singularity that AI is pulling us toward. Here, you sink into yourself and into nature. Like a mirror—through nature into yourself, and back again."
         ]},
         {sub:"Life in Town", body:[
-          "The center of Kaş is bustling with life. The main street, packed with cars and mopeds, never feels central or overwhelming. It's wide, sure, compared to all the tiny side streets, but it feels like its own, so flat, people walking back and forth with no traffic lights. There's a light sense of everyone being neighbors with everyone. Delicious shawarma, not the same taste as back home. Or chicken shish with salad—the center has plenty of inexpensive cafés and small canteen-style restaurants where you're fed well and, importantly, healthily[0024]. By the way, this was always our classic post-workout meal: rice, chicken kebab, salad, bread, and lentil soup. And of course, classic strong Turkish tea from those small, shapely little glasses.",
+          "The center of Kaş is bustling with life. The main street, packed with cars and mopeds, never feels central or overwhelming. It's wide, sure, compared to all the tiny side streets, but it feels like its own, so flat, people walking back and forth with no traffic lights. There's a light sense of everyone being neighbors with everyone. Delicious shawarma, not the same taste as back home. Or chicken shish with salad—the center has plenty of inexpensive cafés and small canteen-style restaurants where you're fed well and, importantly, deliciously[0024]. By the way, this was always our classic post-workout meal: rice, chicken kebab, salad, bread, and lentil soup. And of course, classic strong Turkish tea from those small, shapely little glasses.",
           "It's just a great Turkish style in general—they're always sitting outside at little tables, endlessly smoking and drinking tea from those small Turkish glasses (cups?). It's incredibly stylish. However you feel about smoking, there's something in it that reveals the particular atmosphere of the country, and it's romantically magnetic. I've sat like that myself more than once. When traveling, I sometimes smoke. Always hand-rolled, with original natural tobacco. Never cigarettes."
         ]},
         {sub:"Sunset Feelings", body:[
@@ -3144,6 +3144,25 @@ a{color:inherit;}
           ghostInner.scrollTop = essayReaderInner.scrollTop;
         }
         essayReader.parentNode.insertBefore(ghost, essayReader);
+        /* collapse the REAL element the instant the ghost is standing in
+           for it -- transition:none makes both clip-path AND visibility
+           (see .about's own rule) snap shut in this exact tick, not 0.6s
+           from now, so nothing changes on screen: the ghost already shows
+           the identical Period the real element just stopped showing.
+
+           This used to happen AFTER rebuilding the element's own content
+           for Essay, on the theory that reopening in the same tick as that
+           rebuild was racing the browser's own paint. It wasn't -- moving
+           the collapse BEFORE the rebuild removes the race by construction
+           instead of timing around it: an element sitting at
+           visibility:hidden cannot paint anything, correct or not, no
+           matter when the browser gets around to laying out what's inside
+           it. Whatever used to flash during the rebuild now flashes inside
+           a box nobody can see. */
+        essayReader.style.transition = 'none';
+        essayReader.classList.remove('open');
+        void essayReader.offsetHeight;
+        essayReader.style.transition = '';
       }
       closePhotoLayer(true);
       /* NOT window.scrollTo(0,0): the reader is a position:fixed overlay
@@ -3162,51 +3181,14 @@ a{color:inherit;}
       essayReader.setAttribute('aria-hidden','false');
       document.body.style.overflow = 'hidden';
       gcEvent('essay-reader/open/'+code, 'Essay reader opened: '+code);
-
-      /* the actual reveal: snapping .open off (transition disabled) with a
-         freshly rebuilt Essay inside, forcing it open again a moment later,
-         restarts the shutter from a clean starting point instead of racing
-         its own still-running close. Reopening in the very same tick,
-         though, occasionally caught the browser mid-catch-up on the huge
-         innerHTML swap just above -- the reveal's first visible frames
-         would show last tier's narrower columns for an instant before
-         settling onto the real ones, most visible right where the columns
-         actually differ most (the title, hard left of the paragraphs).
-         Two rAFs (the standard "wait for a real paint" pattern -- one frame
-         merely schedules the recalculation, the next one is guaranteed to
-         run after it landed) gives the browser a full, genuine paint of the
-         finished layout while still fully hidden behind the ghost, so the
-         reveal that follows only ever animates the correct, settled state. */
-      var revealed = false;
-      function reveal(){
-        if(revealed) return; /* the rAF chain and the timeout fallback below race each other on purpose -- whichever fires first wins, and the loser is a no-op */
-        revealed = true;
-        essayReader.classList.add('open');
-        if(!wasOpen || changingEssay) playWhoosh('open');
-        if(ghost){
-          /* matches the shutter's own .6s clip-path transition, with a
-             little slack -- by the time this fires the real reader has
-             fully covered the screen, so removing the clone underneath it
-             is imperceptible */
-          setTimeout(function(){ ghost.remove(); }, 650);
-        }
-      }
-      if(changingEssay){
-        essayReader.style.transition = 'none';
-        essayReader.classList.remove('open');
-        void essayReader.offsetHeight;
-        essayReader.style.transition = '';
-        requestAnimationFrame(function(){ requestAnimationFrame(reveal); });
-        /* belt and suspenders: rAF is reliable in any real, foregrounded tab
-           (which this always is -- the click that got here required it),
-           but nothing about the page's own correctness should hinge on a
-           browser's rendering pipeline behaving perfectly. Without this, a
-           starved or backgrounded rAF would leave Essay stuck invisible
-           behind the ghost forever instead of just losing the one-frame
-           polish this was for. */
-        setTimeout(reveal, 120);
-      } else {
-        reveal();
+      essayReader.classList.add('open');
+      if(!wasOpen || changingEssay) playWhoosh('open');
+      if(ghost){
+        /* matches the shutter's own .6s clip-path transition, with a little
+           slack -- by the time this fires the real reader has fully
+           covered the screen, so removing the clone underneath it is
+           imperceptible */
+        setTimeout(function(){ ghost.remove(); }, 650);
       }
 
       /* the About essay is the one opened from the wordmark rather than a
