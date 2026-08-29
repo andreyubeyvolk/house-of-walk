@@ -605,8 +605,22 @@ a{color:inherit;}
   overflow-y:hidden;
   overscroll-behavior:contain;
   scrollbar-width:none;
+  /* invites the hand-drag pan (see the filmrow mousedown handler in JS) --
+     harmless on touch, where cursor is never shown anyway. A specific
+     landscape photo overrides this to zoom-in/zoom-out below; .dragging
+     (added only while a drag is actually in progress) overrides THAT back
+     to grabbing everywhere, !important because it has to beat that more
+     specific per-photo rule for exactly as long as the drag lasts. */
+  cursor:grab;
 }
 .filmrow::-webkit-scrollbar{display:none;}
+.filmrow.dragging{
+  cursor:grabbing;
+  /* stops the drag from also highlighting text/selecting a photo's tag
+     code as the cursor sweeps across the strip */
+  user-select:none;
+}
+.filmrow.dragging *{cursor:grabbing !important;}
 
 .frame{
   flex:0 0 auto;
@@ -3724,6 +3738,11 @@ a{color:inherit;}
     frameEls.forEach(function(el){
       if(!el.classList.contains('land')) return;
       el.querySelector('.ph').addEventListener('click', function(){
+        /* a click that ended a real hand-drag (see the filmrow mousedown
+           handler below) shouldn't ALSO toggle expand -- releasing the
+           mouse after panning happens to land back on a photo just as
+           often as empty space, and it was never meant as a click there */
+        if(dragMoved) return;
         el.classList.toggle('expanded');
         layoutFrames();
       });
@@ -3781,9 +3800,13 @@ a{color:inherit;}
        first/last photo (or the gap between any two photos) closes the
        viewer, same as Close — e.target is filmrow itself only when the
        click didn't land on a .frame or anything inside one, since those
-       would be the actual e.target via normal event bubbling. */
+       would be the actual e.target via normal event bubbling. dragMoved
+       guards this the same way it guards the expand-toggle above: panning
+       the strip by grabbing empty padding (there's plenty of it, 50vw on
+       each side) and releasing there is a completely normal way to end a
+       drag, not a click asking to close the whole viewer. */
     filmrow.addEventListener('click', function(e){
-      if(mobileQuery.matches) return;
+      if(mobileQuery.matches || dragMoved) return;
       if(e.target === filmrow) closeViewer();
     });
 
@@ -4177,34 +4200,74 @@ a{color:inherit;}
     if(e.key==='Escape' && viewer.classList.contains('open')) closeViewer();
   });
 
-  var dragging = false, dragStartX = 0, dragStartScroll = 0;
+  /* one drag state machine, two ways into it: the thumb bar (mode 'thumb',
+     original) and now the film strip itself (mode 'photo') -- grabbing a
+     photo and dragging it left/right pans the strip, the same gesture a
+     trackpad swipe already does, for anyone who'd rather use a mouse
+     directly on the thing they're looking at than hunt for the scrollbar
+     at the bottom. Both share the same mousemove/mouseup pair below since
+     the two only really differ in how a pixel of mouse movement converts
+     to a pixel of scroll -- 1:1 for the photo (it should track the cursor
+     exactly, like actually grabbing it), scaled by the track/content ratio
+     for the thumb (unchanged from before). */
+  var dragMode = null, dragStartX = 0, dragStartScroll = 0, dragMoved = false;
   hsThumb.addEventListener('mousedown', function(e){
     if(hLerp) hLerp.stop();
-    dragging = true;
+    dragMode = 'thumb';
     dragStartX = e.clientX;
     dragStartScroll = filmrow.scrollLeft;
     hsThumb.style.cursor = 'grabbing';
     e.preventDefault();
   });
+  /* desktop only -- touch already pans the strip natively via overflow-x,
+     and a synthetic mouse event from a tap would otherwise fire this too,
+     fighting the real touch scroll it's riding on top of. Landscape photos
+     are still individually clickable to expand (see buildViewer's own
+     click handler on .ph.zoomable) -- that keeps working exactly as before
+     for an actual click; this only ever engages once the mouse has moved
+     past a real drag, at which point dragMoved suppresses the click's own
+     expand-toggle so the two gestures can't both fire off one gesture. */
+  filmrow.addEventListener('mousedown', function(e){
+    if(mobileQuery.matches || e.button !== 0) return;
+    if(hLerp) hLerp.stop();
+    dragMode = 'photo';
+    dragMoved = false;
+    dragStartX = e.clientX;
+    dragStartScroll = filmrow.scrollLeft;
+    filmrow.classList.add('dragging');
+    /* stops the browser's own native "drag this image out" ghost and text
+       selection from starting -- doesn't stop the click event that still
+       fires on mouseup over the same element, so the expand-toggle below
+       is untouched for a real click. */
+    e.preventDefault();
+  });
   window.addEventListener('mousemove', function(e){
-    if(!dragging) return;
-    var trackW = hsTrack.clientWidth;
-    var viewW = filmrow.clientWidth;
+    if(!dragMode) return;
     var bounds = getFilmrowBounds();
-    var maxScroll = bounds.max - bounds.min;
-    var effectiveContentW = maxScroll + viewW;
-    var thumbW = Math.max(30, trackW * (viewW / effectiveContentW));
-    var deltaPx = e.clientX - dragStartX;
-    var scrollDelta = deltaPx * (maxScroll / (trackW - thumbW));
-    filmrow.scrollLeft = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll + scrollDelta));
+    if(dragMode === 'thumb'){
+      var trackW = hsTrack.clientWidth;
+      var viewW = filmrow.clientWidth;
+      var maxScroll = bounds.max - bounds.min;
+      var effectiveContentW = maxScroll + viewW;
+      var thumbW = Math.max(30, trackW * (viewW / effectiveContentW));
+      var deltaPx = e.clientX - dragStartX;
+      var scrollDelta = deltaPx * (maxScroll / (trackW - thumbW));
+      filmrow.scrollLeft = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll + scrollDelta));
+    } else {
+      var panDx = e.clientX - dragStartX;
+      /* a few px of wobble on what was meant as a click shouldn't cancel
+         it -- only a real, deliberate drag should suppress the expand */
+      if(Math.abs(panDx) > 4) dragMoved = true;
+      filmrow.scrollLeft = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll - panDx));
+    }
     updateThumb();
   });
   window.addEventListener('mouseup', function(){
-    if(dragging){
-      dragging = false;
-      hsThumb.style.cursor = 'grab';
-      if(hLerp) hLerp.sync();
-    }
+    if(!dragMode) return;
+    if(dragMode === 'thumb') hsThumb.style.cursor = 'grab';
+    else filmrow.classList.remove('dragging');
+    dragMode = null;
+    if(hLerp) hLerp.sync();
   });
 
   var resizeTimer;
