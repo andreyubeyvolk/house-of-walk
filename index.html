@@ -3692,15 +3692,28 @@ a{color:inherit;}
      parseFloat on that is NaN. Resolving it through a disposable probe
      element instead of reading some existing element's own computed
      padding (e.g. .topbar's) sidesteps that element ever being mid
-     CSS-transition or otherwise not reflecting --pad's current value. */
+     CSS-transition or otherwise not reflecting --pad's current value.
+
+     Memoized -- this used to insert, measure and remove that probe on
+     EVERY call, and getFilmrowBounds (which calls this) runs on every
+     single mousemove while dragging the film strip or its thumb. A mouse
+     barely notices; a trackpad's own click-drag fires mousemove far more
+     densely, and inserting/removing a DOM node that often was exactly what
+     turned dragging into the stutter/undershoot reported — some of those
+     mousemove events were still being handled when the next one arrived.
+     --pad only ever changes with viewport width, so the cached value only
+     needs invalidating on resize (see that handler below), not per call. */
+  var cachedDeskPad = null;
   function getDeskPad(){
     if(mobileQuery.matches) return 0;
-    var probe = document.createElement('div');
-    probe.style.cssText = 'position:absolute;visibility:hidden;width:var(--pad);';
-    document.body.appendChild(probe);
-    var px = parseFloat(getComputedStyle(probe).width) || 0;
-    document.body.removeChild(probe);
-    return px;
+    if(cachedDeskPad === null){
+      var probe = document.createElement('div');
+      probe.style.cssText = 'position:absolute;visibility:hidden;width:var(--pad);';
+      document.body.appendChild(probe);
+      cachedDeskPad = parseFloat(getComputedStyle(probe).width) || 0;
+      document.body.removeChild(probe);
+    }
+    return cachedDeskPad;
   }
 
   function getFilmrowBounds(){
@@ -3769,6 +3782,12 @@ a{color:inherit;}
        only ever runs once) but the filmstrip gets re-centered on a new photo
        every time the viewer reopens. */
     filmrow.addEventListener('wheel', function(e){
+      /* a hand-drag already in progress owns scrollLeft for its duration
+         (see the mousedown handlers below) -- a trackpad occasionally
+         reports wheel deltas alongside an actual held click-drag on some
+         OS/browser combinations, and letting both write to the same
+         property in the same frame is a fight neither wins cleanly. */
+      if(dragMode) return;
       var dx = Math.abs(e.deltaX), dy = Math.abs(e.deltaY);
       if(dy >= dx){
         var bounds = getFilmrowBounds();
@@ -3919,10 +3938,18 @@ a{color:inherit;}
     updateThumb();
   }
 
-  function updateThumb(){
-    var trackW = hsTrack.clientWidth;
-    var viewW = filmrow.clientWidth;
-    var bounds = getFilmrowBounds();
+  /* cached is the same {bounds, trackW, viewW} the active drag below
+     computed once at mousedown -- passed straight through here rather than
+     re-measured, since re-measuring per mousemove (offsetLeft/clientWidth
+     reads right after a scrollLeft write) is exactly what was forcing a
+     synchronous layout recalculation on every single one of them. Every
+     other caller (resize, wheel, opening a new photo) still omits it and
+     gets a fresh measurement -- correct is what matters there, not fast,
+     and none of them run anywhere near drag frequency. */
+  function updateThumb(cached){
+    var trackW = cached ? cached.trackW : hsTrack.clientWidth;
+    var viewW = cached ? cached.viewW : filmrow.clientWidth;
+    var bounds = cached ? cached.bounds : getFilmrowBounds();
     var maxScroll = bounds.max - bounds.min;
     /* the thumb represents the clamped [min,max] scrollable range, not the
        full padded scrollWidth — the extra padding runway beyond the
@@ -4211,11 +4238,21 @@ a{color:inherit;}
      exactly, like actually grabbing it), scaled by the track/content ratio
      for the thumb (unchanged from before). */
   var dragMode = null, dragStartX = 0, dragStartScroll = 0, dragMoved = false;
+  /* {bounds, trackW, viewW}, measured once when the drag actually starts
+     and reused for every mousemove until it ends -- see updateThumb's own
+     comment for why. None of these three change mid-drag under normal use
+     (nothing resizes while you're holding the mouse down), so a snapshot
+     from the start of the gesture stays correct for the whole thing. */
+  var dragCache = null;
+  function startDrag(mode, clientX){
+    dragMode = mode;
+    dragStartX = clientX;
+    dragStartScroll = filmrow.scrollLeft;
+    dragCache = {bounds: getFilmrowBounds(), trackW: hsTrack.clientWidth, viewW: filmrow.clientWidth};
+  }
   hsThumb.addEventListener('mousedown', function(e){
     if(hLerp) hLerp.stop();
-    dragMode = 'thumb';
-    dragStartX = e.clientX;
-    dragStartScroll = filmrow.scrollLeft;
+    startDrag('thumb', e.clientX);
     hsThumb.style.cursor = 'grabbing';
     e.preventDefault();
   });
@@ -4230,10 +4267,8 @@ a{color:inherit;}
   filmrow.addEventListener('mousedown', function(e){
     if(mobileQuery.matches || e.button !== 0) return;
     if(hLerp) hLerp.stop();
-    dragMode = 'photo';
+    startDrag('photo', e.clientX);
     dragMoved = false;
-    dragStartX = e.clientX;
-    dragStartScroll = filmrow.scrollLeft;
     filmrow.classList.add('dragging');
     /* stops the browser's own native "drag this image out" ghost and text
        selection from starting -- doesn't stop the click event that still
@@ -4241,32 +4276,67 @@ a{color:inherit;}
        is untouched for a real click. */
     e.preventDefault();
   });
+  /* the actual scrollLeft write (plus the thumb's own style update) happens
+     at most once per animation frame, no matter how many mousemove events
+     land in between -- a trackpad can report pointer position far denser
+     than 60Hz, and writing scrollLeft synchronously on every single one of
+     those (each dragging the thumb's style along with it) was exactly what
+     turned a fast drag into stutter: once the work queued up between two
+     real frames exceeds the ~16ms one frame has to spend, the browser has
+     no choice but to skip painting some of them, which is what actually
+     reads as "janky, doesn't keep up, snaps instead of gliding". Only the
+     TARGET is computed on every mousemove now (cheap: a subtraction and a
+     clamp); the one requestAnimationFrame in flight at a time picks up
+     whatever the latest target is when it actually gets to run. The wheel
+     path already worked this way via hLerp's own tick loop -- this just
+     brings the drag path in line with it instead of leaving it as the one
+     place still writing straight through on raw input. */
+  var dragPendingScroll = null, dragRafPending = false;
+  function applyDragFrame(){
+    dragRafPending = false;
+    if(dragPendingScroll === null) return;
+    filmrow.scrollLeft = dragPendingScroll;
+    dragPendingScroll = null;
+    updateThumb(dragCache);
+  }
   window.addEventListener('mousemove', function(e){
     if(!dragMode) return;
-    var bounds = getFilmrowBounds();
+    var bounds = dragCache.bounds;
+    var target;
     if(dragMode === 'thumb'){
-      var trackW = hsTrack.clientWidth;
-      var viewW = filmrow.clientWidth;
       var maxScroll = bounds.max - bounds.min;
-      var effectiveContentW = maxScroll + viewW;
-      var thumbW = Math.max(30, trackW * (viewW / effectiveContentW));
+      var effectiveContentW = maxScroll + dragCache.viewW;
+      var thumbW = Math.max(30, dragCache.trackW * (dragCache.viewW / effectiveContentW));
       var deltaPx = e.clientX - dragStartX;
-      var scrollDelta = deltaPx * (maxScroll / (trackW - thumbW));
-      filmrow.scrollLeft = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll + scrollDelta));
+      var scrollDelta = deltaPx * (maxScroll / (dragCache.trackW - thumbW));
+      target = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll + scrollDelta));
     } else {
       var panDx = e.clientX - dragStartX;
       /* a few px of wobble on what was meant as a click shouldn't cancel
          it -- only a real, deliberate drag should suppress the expand */
       if(Math.abs(panDx) > 4) dragMoved = true;
-      filmrow.scrollLeft = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll - panDx));
+      target = Math.min(bounds.max, Math.max(bounds.min, dragStartScroll - panDx));
     }
-    updateThumb();
+    dragPendingScroll = target;
+    if(!dragRafPending){
+      dragRafPending = true;
+      requestAnimationFrame(applyDragFrame);
+    }
   });
   window.addEventListener('mouseup', function(){
     if(!dragMode) return;
+    /* the last mousemove before release may still be waiting on its own
+       rAF -- apply it right now instead of leaving the strip a frame short
+       of where the cursor actually let go. */
+    if(dragPendingScroll !== null){
+      filmrow.scrollLeft = dragPendingScroll;
+      dragPendingScroll = null;
+      updateThumb(dragCache);
+    }
     if(dragMode === 'thumb') hsThumb.style.cursor = 'grab';
     else filmrow.classList.remove('dragging');
     dragMode = null;
+    dragCache = null;
     if(hLerp) hLerp.sync();
   });
 
@@ -4277,6 +4347,9 @@ a{color:inherit;}
     if(window.innerWidth !== lastResizeWidth){
       lastResizeWidth = window.innerWidth;
       widthChangedSinceLastPass = true;
+      /* --pad is width-based (clamp(16px,4vw,40px)) -- the cached probe
+         result from getDeskPad() is now stale */
+      cachedDeskPad = null;
     }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
