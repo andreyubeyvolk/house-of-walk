@@ -3789,17 +3789,30 @@ a{color:inherit;}
          property in the same frame is a fight neither wins cleanly. */
       if(dragMode) return;
       var dx = Math.abs(e.deltaX), dy = Math.abs(e.deltaY);
-      if(dy >= dx){
-        var bounds = getFilmrowBounds();
-        var t = hLerp.get();
-        if(t === null) t = filmrow.scrollLeft;
-        var movingForward = e.deltaY > 0;
-        var atBoundary = movingForward ? (t >= bounds.max - 0.5) : (t <= bounds.min + 0.5);
-        t = Math.min(bounds.max, Math.max(bounds.min, t + e.deltaY*1.6));
-        hLerp.set(t);
-        if(!atBoundary && filmTickGate.check(t)) playTick();
-        e.preventDefault();
-      }
+      /* a vertical wheel notch or a vertical two-finger swipe reports as
+         deltaY, and gets redirected into horizontal scroll here since
+         there's nothing to scroll vertically in this viewer -- but a
+         genuine horizontal two-finger swipe reports as deltaX, and used to
+         fall straight through this handler untouched (the old code only
+         ever looked at deltaY): no hLerp smoothing, no bounds clamp, and
+         critically no preventDefault, so the browser's own native scroll
+         ran unopposed instead. That's invisible on a Mac trackpad, whose
+         OS-level scroll reporting is already smooth on its own -- it's
+         exactly what read as jerky/stuttering on a Windows precision
+         touchpad, where the raw per-event deltas are chunkier and rely on
+         something downstream to smooth them out. Picking whichever axis is
+         actually dominant, instead of only ever looking at deltaY, routes
+         BOTH gestures through the same smoothed, clamped path. */
+      var delta = dy >= dx ? e.deltaY : e.deltaX;
+      var bounds = getFilmrowBounds();
+      var t = hLerp.get();
+      if(t === null) t = filmrow.scrollLeft;
+      var movingForward = delta > 0;
+      var atBoundary = movingForward ? (t >= bounds.max - 0.5) : (t <= bounds.min + 0.5);
+      t = Math.min(bounds.max, Math.max(bounds.min, t + delta*1.6));
+      hLerp.set(t);
+      if(!atBoundary && filmTickGate.check(t)) playTick();
+      e.preventDefault();
     }, {passive:false});
 
     filmrow.addEventListener('scroll', onScroll, {passive:true});
