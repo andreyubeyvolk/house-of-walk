@@ -1995,7 +1995,7 @@ a{color:inherit;}
           "I could go on forever about all the endless little pleasures of the streets of Paris…[0058] About visiting the superstylish Nike House of Innovation[0028] store (ha, so that's where another inspiration for my project's name was hiding, deep in my subconscious!), whose bags I'd seen on Pinterest and now own myself. About the mountain of posters, stickers, and street art in general on the streets (Obey, Space Invader… the 16-year-old Andrey inside me was thrilled!)."
         ]},
         {sub:"Étretat", body:[
-          "But I want to talk about our trip out into nature—to Normandy, to Étretat[0048]. My wife Katya had dreamed of going there. Really dreamed of it. A dream. Not just plans. The kind of dream you're almost afraid to dream because it feels too out of reach. And then we actually went. We were startled by how run-down the bus station looked—we stayed on guard so nothing would get stolen. The place itself wasn't much. But the bus was super comfortable. The ride itself was pure pleasure. Along the way, I remember, we stopped in some small town, and there was a stunningly beautiful Gothic church. I'd love to go back there and walk around. God, give me the strength and the chance! And after that, we arrived in Étretat. A calm, lovely, beautiful little village-town, with sea views that are genuinely hard to believe[0045]. It was right there, up on the cliff, in that meadow, that we felt more alive than ever in this life! The dream came true!"
+          "But I want to talk about our trip out into nature—to Normandy, to Étretat[0040]. My wife Katya had dreamed of going there. Really dreamed of it. A dream. Not just plans. The kind of dream you're almost afraid to dream because it feels too out of reach. And then we actually went. We were startled by how run-down the bus station looked—we stayed on guard so nothing would get stolen. The place itself wasn't much. But the bus was super comfortable. The ride itself was pure pleasure. Along the way, I remember, we stopped in some small town, and there was a stunningly beautiful Gothic church. I'd love to go back there and walk around. God, give me the strength and the chance! And after that, we arrived in Étretat. A calm, lovely, beautiful little village-town, with sea views that are genuinely hard to believe[0045]. It was right there, up on the cliff, in that meadow, that we felt more alive than ever in this life! The dream came true!"
         ]},
         {sub:"Anti Public Library", body:[
           "And the last thing I want to share, purely from me—the café Anti Public Library[0065], from my favorite brand, Enfants Riches Déprimes[0067]. I could talk for a long time about this melancholic, avant-garde-punk, Gothic aesthetic of nihilism and depression. About how many layers of meaning, dark romanticism, protest, occultism, and hundreds of smoked cigarette packs there are behind it. But I'll just talk about their café, Anti Public Library. It was an important checkpoint for me—to visit such an iconic spot. Books[0064], vinyl records[0005], a retro atmosphere, and one of the tastiest (and most expensive) filter coffees of my life. I savored every minute there, sitting outside on a bench at a little table, sipping my coffee, unhurriedly rolling cigarettes[0066]. That's the pensive, fashionable, decadent atmosphere of Paris right there. Coffee and cigarettes."
@@ -3150,6 +3150,24 @@ a{color:inherit;}
        (compact state, font metrics, mobile). */
     function syncEssayReaderTop(){
       var topbarEl = document.querySelector('.topbar');
+      /* the header shrinks to .compact past 24px of page scroll (see
+         updateTopbarCompact) -- whatever it happened to be at the exact
+         moment the essay was opened is what this was measuring, with no
+         normalization. A cover card sitting further down the grid (Paris,
+         scrolled well past that threshold) opened onto a visibly shorter
+         header than one near the top (Kaş) did, purely because of where
+         each trip happens to fall in the grid, not anything about the
+         essay itself. Forcing the expanded state before measuring -- the
+         same synchronous disable-transition/toggle-class/restore technique
+         the standalone About page used to use before it was folded into
+         this reader -- makes the essay's own layout independent of
+         whatever scroll position it happened to be opened from. Body
+         scroll is locked for as long as the essay stays open, so this
+         only has to run once per open; it's harmless to repeat on resize. */
+      topbarEl.style.transition = 'none';
+      topbarEl.classList.remove('compact');
+      void topbarEl.offsetHeight;
+      topbarEl.style.transition = '';
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
       essayReaderInner.style.top = headerBottom + 'px';
       /* matching the real grid's own header-to-tag gap is what makes the
@@ -3283,6 +3301,12 @@ a{color:inherit;}
       essayReader.classList.remove('open');
       essayReader.setAttribute('aria-hidden','true');
       closePhotoLayer(true); /* a footnote photo left open over the text has nothing to sit over once the reader goes */
+      /* the header was forced expanded for as long as the essay was open
+         (see syncEssayReaderTop) regardless of the real page scroll
+         position, which never actually changed underneath it -- re-check
+         that real position now so a header opened from deep in the grid
+         shrinks back to compact instead of staying wrongly full-height. */
+      if(window.updateTopbarCompact) window.updateTopbarCompact();
       if(currentEssayCode === 'ABOUT'){
         siteWordmark.classList.remove('planet-out');
         planetSpin.forceStop();
@@ -4462,6 +4486,12 @@ a{color:inherit;}
   }
   window.addEventListener('scroll', updateTopbarCompact, {passive:true});
   updateTopbarCompact();
+  /* bridge for closeEssay (a separate closure) to re-sync the header's
+     compact/expanded state against the real, unchanged scroll position
+     once the essay closes -- see syncEssayReaderTop's own comment for why
+     it forces expanded WHILE open, which otherwise leaves the header
+     wrongly stuck expanded on a page that's still scrolled down. */
+  window.updateTopbarCompact = updateTopbarCompact;
 
   /* Close has to land exactly where Dark is, and the photo code beside it on
      the same line. Both of those are centred in a strip of --vhead, so
