@@ -984,51 +984,65 @@ a{color:inherit;}
    4/5/6-column numbers are still pending — see the 3-column tier below,
    which IS final: it's the real grid's own fixed mobile column count
    (.grid goes straight from auto-fill to a hard 3 under 680px, so this is a
-   real tier, not a stand-in for a single-column phone stack). */
-#essayReaderInner[data-cols="3"] .er-title{grid-column:1;}
-#essayReaderInner[data-cols="3"] .er-sub{grid-column:1;}
-#essayReaderInner[data-cols="3"] .er-text{grid-column:2 / 4;}
+   real tier, not a stand-in for a single-column phone stack).
+
+   Keyed on the CLASS, deliberately, not on #essayReaderInner. The
+   Period→Essay handoff clones this whole element to stand in as a frozen
+   ghost of the outgoing essay, and has to strip the clone's id (a
+   duplicate id would make getElementById return the GHOST, since it sits
+   earlier in the document than the real one). An id-keyed selector
+   therefore matched the real element but never the clone: the ghost kept
+   its data-cols and its inline pixel track widths, but every .er-title/
+   .er-sub/.er-text below lost its grid-column entirely and fell back to
+   auto-placement from column 1 — the outgoing essay's text visibly
+   snapping to a narrow strip at the left edge for the length of the
+   handoff. Matching on the class the clone also carries makes the ghost
+   render identically to what it's standing in for, which is the entire
+   point of it. */
+.essay-reader-inner[data-cols="3"] .er-title{grid-column:1;}
+.essay-reader-inner[data-cols="3"] .er-sub{grid-column:1;}
+.essay-reader-inner[data-cols="3"] .er-text{grid-column:2 / 4;}
 /* on the 3-column phone tier the closing paragraph keeps the SAME two
    columns every other paragraph has. The narrower closing treatment is a
    wide-screen device -- at this width dropping it to one column just makes
    the last paragraph a cramped ribbon next to everything above it. */
-#essayReaderInner[data-cols="3"] .er-text-final{grid-column:2 / 4;}
-#essayReaderInner[data-cols="4"] .er-title{grid-column:1 / 2;}
-#essayReaderInner[data-cols="4"] .er-sub{grid-column:2;}
-#essayReaderInner[data-cols="4"] .er-text{grid-column:3 / 5;}
-#essayReaderInner[data-cols="4"] .er-text-final{grid-column:3 / 4;}
-#essayReaderInner[data-cols="5"] .er-title{grid-column:2 / 3;}
-#essayReaderInner[data-cols="5"] .er-sub{grid-column:3;}
-#essayReaderInner[data-cols="5"] .er-text{grid-column:4 / 6;}
-#essayReaderInner[data-cols="5"] .er-text-final{grid-column:4 / 5;}
-#essayReaderInner[data-cols="6"] .er-title{grid-column:2 / 3;}
-#essayReaderInner[data-cols="6"] .er-sub{grid-column:3;}
-#essayReaderInner[data-cols="6"] .er-text{grid-column:4 / 7;}
-#essayReaderInner[data-cols="6"] .er-text-final{grid-column:4 / 6;}
-#essayReaderInner[data-cols="7"] .er-title{grid-column:3 / 4;}
-#essayReaderInner[data-cols="7"] .er-sub{grid-column:4;}
-#essayReaderInner[data-cols="7"] .er-text{grid-column:5 / 8;}
-#essayReaderInner[data-cols="7"] .er-text-final{grid-column:5 / 7;}
-#essayReaderInner[data-cols="8"] .er-title{grid-column:4 / 5;}
-#essayReaderInner[data-cols="8"] .er-sub{grid-column:5;}
-#essayReaderInner[data-cols="8"] .er-text{grid-column:6 / 9;}
-#essayReaderInner[data-cols="8"] .er-text-final{grid-column:6 / 8;}
-#essayReaderInner[data-cols="9"] .er-title{grid-column:4 / 5;}
-#essayReaderInner[data-cols="9"] .er-sub{grid-column:5;}
-#essayReaderInner[data-cols="9"] .er-text{grid-column:6 / 10;}
-#essayReaderInner[data-cols="9"] .er-text-final{grid-column:6 / 8;}
-#essayReaderInner[data-cols="10"] .er-title{grid-column:5 / 6;}
-#essayReaderInner[data-cols="10"] .er-sub{grid-column:6;}
-#essayReaderInner[data-cols="10"] .er-text{grid-column:7 / 11;}
-#essayReaderInner[data-cols="10"] .er-text-final{grid-column:7 / 9;}
-#essayReaderInner[data-cols="11"] .er-title{grid-column:6 / 7;}
-#essayReaderInner[data-cols="11"] .er-sub{grid-column:7;}
-#essayReaderInner[data-cols="11"] .er-text{grid-column:8 / 12;}
-#essayReaderInner[data-cols="11"] .er-text-final{grid-column:8 / 10;}
-#essayReaderInner[data-cols="12"] .er-title{grid-column:5 / 7;}
-#essayReaderInner[data-cols="12"] .er-sub{grid-column:7 / 9;}
-#essayReaderInner[data-cols="12"] .er-text{grid-column:9 / 13;}
-#essayReaderInner[data-cols="12"] .er-text-final{grid-column:9 / 11;}
+.essay-reader-inner[data-cols="3"] .er-text-final{grid-column:2 / 4;}
+.essay-reader-inner[data-cols="4"] .er-title{grid-column:1 / 2;}
+.essay-reader-inner[data-cols="4"] .er-sub{grid-column:2;}
+.essay-reader-inner[data-cols="4"] .er-text{grid-column:3 / 5;}
+.essay-reader-inner[data-cols="4"] .er-text-final{grid-column:3 / 4;}
+.essay-reader-inner[data-cols="5"] .er-title{grid-column:2 / 3;}
+.essay-reader-inner[data-cols="5"] .er-sub{grid-column:3;}
+.essay-reader-inner[data-cols="5"] .er-text{grid-column:4 / 6;}
+.essay-reader-inner[data-cols="5"] .er-text-final{grid-column:4 / 5;}
+.essay-reader-inner[data-cols="6"] .er-title{grid-column:2 / 3;}
+.essay-reader-inner[data-cols="6"] .er-sub{grid-column:3;}
+.essay-reader-inner[data-cols="6"] .er-text{grid-column:4 / 7;}
+.essay-reader-inner[data-cols="6"] .er-text-final{grid-column:4 / 6;}
+.essay-reader-inner[data-cols="7"] .er-title{grid-column:3 / 4;}
+.essay-reader-inner[data-cols="7"] .er-sub{grid-column:4;}
+.essay-reader-inner[data-cols="7"] .er-text{grid-column:5 / 8;}
+.essay-reader-inner[data-cols="7"] .er-text-final{grid-column:5 / 7;}
+.essay-reader-inner[data-cols="8"] .er-title{grid-column:4 / 5;}
+.essay-reader-inner[data-cols="8"] .er-sub{grid-column:5;}
+.essay-reader-inner[data-cols="8"] .er-text{grid-column:6 / 9;}
+.essay-reader-inner[data-cols="8"] .er-text-final{grid-column:6 / 8;}
+.essay-reader-inner[data-cols="9"] .er-title{grid-column:4 / 5;}
+.essay-reader-inner[data-cols="9"] .er-sub{grid-column:5;}
+.essay-reader-inner[data-cols="9"] .er-text{grid-column:6 / 10;}
+.essay-reader-inner[data-cols="9"] .er-text-final{grid-column:6 / 8;}
+.essay-reader-inner[data-cols="10"] .er-title{grid-column:5 / 6;}
+.essay-reader-inner[data-cols="10"] .er-sub{grid-column:6;}
+.essay-reader-inner[data-cols="10"] .er-text{grid-column:7 / 11;}
+.essay-reader-inner[data-cols="10"] .er-text-final{grid-column:7 / 9;}
+.essay-reader-inner[data-cols="11"] .er-title{grid-column:6 / 7;}
+.essay-reader-inner[data-cols="11"] .er-sub{grid-column:7;}
+.essay-reader-inner[data-cols="11"] .er-text{grid-column:8 / 12;}
+.essay-reader-inner[data-cols="11"] .er-text-final{grid-column:8 / 10;}
+.essay-reader-inner[data-cols="12"] .er-title{grid-column:5 / 7;}
+.essay-reader-inner[data-cols="12"] .er-sub{grid-column:7 / 9;}
+.essay-reader-inner[data-cols="12"] .er-text{grid-column:9 / 13;}
+.essay-reader-inner[data-cols="12"] .er-text-final{grid-column:9 / 11;}
 
 /* ---------- mobile ---------- */
 @media (max-width:680px){
@@ -3217,8 +3231,14 @@ a{color:inherit;}
       var ghost = null;
       if(changingEssay){
         ghost = essayReader.cloneNode(true);
+        /* both ids have to go: a duplicate id would make getElementById
+           return the GHOST rather than the real element, since the ghost is
+           inserted earlier in the document. Everything that styles this
+           subtree is keyed on classes precisely so the clone still renders
+           identically without them -- see the per-tier column table's own
+           comment in CSS for what breaks when it isn't. */
         ghost.removeAttribute('id');
-        var ghostInner = ghost.querySelector('#essayReaderInner');
+        var ghostInner = ghost.querySelector('.essay-reader-inner');
         if(ghostInner){
           /* cloneNode copies markup, not runtime state -- without this the
              clone would start scrolled to its own top regardless of how far
