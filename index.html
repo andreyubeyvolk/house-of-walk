@@ -4107,16 +4107,27 @@ a{color:inherit;}
     window.scrollTo(0, targetY);
   }
 
-  /* mobile only: finds whichever photo is centred right now and warms its
-     next neighbour. Runs continuously while swiping (debounced in onScroll)
-     — unlike the grid repositioning above, this does no scrolling and no
-     layout writes, just a fetchPriority/loading bump, so there's nothing
-     here for it to jank against. */
+  /* finds whichever photo is centred right now and warms both neighbours.
+     Runs continuously while swiping/scrolling/dragging (debounced in
+     onScroll) — this does no scrolling and no layout writes, just a
+     fetchPriority/loading bump, so there's nothing here for it to jank
+     against. Used to be mobile-only, on the assumption that a swipe only
+     ever goes one direction (forward) worth warming ahead of -- but on
+     desktop the exact same gap existed in both directions at once: the
+     wheel/drag-scrolled filmstrip (see the wheel handler and the hand-drag
+     added later) had NOTHING warming its neighbours at all, so every photo
+     you scrolled to relied entirely on the browser's own lazy-loading
+     proximity check noticing it -- which fires roughly, not in strict
+     left-to-right order, which is exactly the "loads out of sequence,
+     every other one instead of the adjacent one" a desktop user would see.
+     Warming both sides also covers scrolling backward, which a one-way
+     "next only" check never did on either platform. */
   function prefetchAroundCurrent(){
-    if(!mobileQuery.matches) return;
     var closest = findClosestFrame();
     if(!closest) return;
-    prefetchNextNeighbor(+closest.dataset.gi);
+    var gi = +closest.dataset.gi;
+    prefetchNeighbor(gi + 1);
+    prefetchNeighbor(gi - 1);
   }
 
   /* the tapped photo's own file gets promoted to eager/high the moment it
@@ -4124,12 +4135,12 @@ a{color:inherit;}
      fetchpriority="low" + loading="lazy" until the browser's own proximity
      check noticed them — which on a phone was right around the time you'd
      already swiped to them, showing the blurred loading state on every
-     single swipe. Warming the very next one as soon as the current one
-     settles means it's usually already there by the time you get to it. */
-  function prefetchNextNeighbor(gi){
-    var nextEl = filmrow.querySelector('[data-gi="'+(gi+1)+'"]');
-    if(!nextEl) return;
-    var img = nextEl.querySelector('.ph-full');
+     single swipe. Warming the neighbours as soon as the current one settles
+     means they're usually already there by the time you get to them. */
+  function prefetchNeighbor(gi){
+    var el = filmrow.querySelector('[data-gi="'+gi+'"]');
+    if(!el) return;
+    var img = el.querySelector('.ph-full');
     if(img && !img.complete){
       img.loading = 'eager';
       img.fetchPriority = 'high';
