@@ -3305,8 +3305,21 @@ a{color:inherit;}
          (see syncEssayReaderTop) regardless of the real page scroll
          position, which never actually changed underneath it -- re-check
          that real position now so a header opened from deep in the grid
-         shrinks back to compact instead of staying wrongly full-height. */
-      if(window.updateTopbarCompact) window.updateTopbarCompact();
+         shrinks back to compact instead of staying wrongly full-height.
+         Silent, not the plain scroll-driven call: this is catching the
+         header up to a position change that already happened while the
+         essay covered it, not reacting to a fresh scroll -- animating it
+         here would show as the header visibly jumping/resizing itself the
+         instant the essay closes, which is exactly the jitter the header's
+         own transition was never meant to produce outside of an actual
+         scroll gesture. */
+      if(window.updateTopbarCompact){
+        var topbarForRestore = document.querySelector('.topbar');
+        topbarForRestore.style.transition = 'none';
+        window.updateTopbarCompact();
+        void topbarForRestore.offsetHeight;
+        topbarForRestore.style.transition = '';
+      }
       if(currentEssayCode === 'ABOUT'){
         siteWordmark.classList.remove('planet-out');
         planetSpin.forceStop();
