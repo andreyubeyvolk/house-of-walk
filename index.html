@@ -1071,6 +1071,20 @@ a{color:inherit;}
     padding:var(--head-pt) var(--pad) var(--head-pb);
     transition:background-color .25s ease;
   }
+  /* every wider tier leaves the title as one nowrap line, deliberately --
+     its own column ends wherever the sub/text column starts, and nothing
+     else shares its row, so letting it overhang past that boundary into
+     empty space costs nothing there. Mobile has no such empty space: the
+     title's column is the same narrow one the subheading sits in, so a
+     long title (a two-line one especially) ran the raw text straight past
+     the screen's own right edge instead of stopping at it. Spanning the
+     essay's full width (all 3 columns, same run the body text gets) and
+     letting it wrap is what a one-column phone layout actually needs --
+     there's no adjacent column for a second line to collide with here. */
+  .essay-reader-inner[data-cols="3"] .er-title{
+    grid-column:1 / 4;
+    white-space:normal;
+  }
   .grid{
     grid-template-columns:repeat(3,1fr);
     gap:14px 8px;
@@ -1341,7 +1355,7 @@ a{color:inherit;}
   </div>
   <div class="footer-col" id="footerCol2">
     <div class="wordmark">Art direction &amp; design</div>
-    <div>Built in four days with Claude Code</div>
+    <div>Built with Claude Code</div>
     <div>Long live AI-DIY</div>
   </div>
   <button class="theme-toggle plate-btn to-top" id="toTopBtn" type="button">To top</button>
@@ -3184,23 +3198,33 @@ a{color:inherit;}
       topbarEl.style.transition = '';
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
       essayReaderInner.style.top = headerBottom + 'px';
-      /* matching the real grid's own header-to-tag gap is what makes the
-         title land exactly on the same line as the grid's card codes on
-         wider tiers -- but on mobile the cards pack in only 14px below the
-         header, which read as the title sitting stuck to it with no
-         breathing room at all. There's no grid alignment worth preserving
-         on this tier anyway (the reader's own 3-column layout doesn't
-         otherwise line up with anything), so it gets the same floor as the
-         gap between sections just below it (40px) instead of whatever the
-         grid happens to leave. */
+      /* used to measure the real grid's OWN first tag and take the gap from
+         its live position -- which reads its actual on-screen coordinate,
+         and the grid scrolls with the page while the header doesn't. That
+         "matched the grid" only by coincidence, at scrollY 0: opening an
+         essay whose cover card sits further down the page (Paris, further
+         down than Kaş) left the page scrolled there, so the FIRST tag in
+         DOM order -- always the same element, wherever the essay was
+         actually opened from -- had long since scrolled out of view above
+         the header, at a wildly different (sometimes negative) position.
+         The number two different essays landed on depended on how far down
+         the grid each one's cover card happened to sit, not on anything
+         about the essay itself -- exactly the "not one consistent template"
+         inconsistency reported.
+
+         The real source of that gap was never the grid's live layout at
+         all: it's .topbar's own margin-bottom, a fixed 14px in the
+         stylesheet, unrelated to scroll position or which essay is open.
+         Reading it directly is both the fix and the simplification --
+         every essay gets the identical, deliberate gap the CSS actually
+         specifies, every time, regardless of scroll position when it was
+         opened. Mobile still floors it at 40px, same reasoning as before:
+         14px reads as the title stuck flush to the header with no
+         breathing room, and there's no grid alignment worth preserving on
+         that tier's own 3-column layout anyway. */
       var minGap = mobileQuery.matches ? 40 : 0;
-      var firstTag = grid.querySelector('.tag');
-      if(firstTag){
-        var gap = firstTag.getBoundingClientRect().top - headerBottom;
-        essayReaderInner.style.paddingTop = Math.max(minGap, gap) + 'px';
-        return;
-      }
-      essayReaderInner.style.paddingTop = Math.max(minGap, 40) + 'px';
+      var structuralGap = parseFloat(getComputedStyle(topbarEl).marginBottom) || 0;
+      essayReaderInner.style.paddingTop = Math.max(minGap, structuralGap) + 'px';
     }
 
     function refreshEssayReader(){
