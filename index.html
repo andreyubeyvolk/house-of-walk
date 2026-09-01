@@ -302,6 +302,20 @@ a{color:inherit;}
 }
 
 /* ---------- header ---------- */
+/* fixed height everywhere, deliberately -- this used to shrink to a
+   .compact padding past 24px of scroll (and back below 4px), which meant
+   Close/Dark and the tagline shifted position on their own mid-scroll, and
+   every essay/reader that measures the header's own height (see
+   syncEssayReaderTop, syncViewerHeadMetrics) had to first force it back to
+   "expanded" before trusting that measurement -- which is exactly the kind
+   of per-page special-casing that kept drifting out of sync between pages
+   (Kaş vs Paris opening onto different header heights was a direct
+   symptom of it). One fixed size, read directly, with nothing to force or
+   normalize first, is the actual fix for that whole class of bug -- not a
+   better compact/expand transition, no compact/expand at all. If a reason
+   ever comes up to bring shrink-on-scroll back, it has to come back
+   everywhere at once (every page, every essay), not as a per-page toggle,
+   or this exact inconsistency returns. */
 .topbar{
   position:sticky;
   top:0;
@@ -313,16 +327,7 @@ a{color:inherit;}
   gap:14px;
   padding:24px var(--pad) 18px;
   margin-bottom:14px;
-  transition:padding .3s ease, background-color .25s ease;
-  /* a sticky element that changes its own height near the scroll boundary is
-     exactly the case CSS scroll-anchoring tries to "helpfully" compensate
-     for by nudging scrollY — which re-triggers the compact toggle and
-     produces the spring/shake. Opt this element out of that entirely. */
-  overflow-anchor:none;
-}
-.topbar.compact{
-  padding-top:2px;
-  padding-bottom:2px;
+  transition:background-color .25s ease;
 }
 .word{
   flex:0 0 auto;
@@ -1059,15 +1064,13 @@ a{color:inherit;}
     --head-pb:11px;
     --vhead:66px;
   }
-  /* static on mobile — no shrink-on-scroll. The compact class is still
-     toggled by JS for wider screens, so neutralise it here rather than
-     relying on it never being added, and drop the padding transition so
-     nothing can animate the height the viewer header is matched against.
+  /* the header is fixed-height on every tier now (see the base .topbar
+     rule's own comment) -- this override just supplies mobile's own
+     font-metric-driven padding instead of desktop's fixed numbers.
      --head-pb:4px puts the header's bottom edge exactly 4px below the
      A.UBV. line, which is the bottom of .word — the tallest thing in the
      row, so it alone decides where the header ends. */
-  .topbar,
-  .topbar.compact{
+  .topbar{
     padding:var(--head-pt) var(--pad) var(--head-pb);
     transition:background-color .25s ease;
   }
@@ -3168,60 +3171,27 @@ a{color:inherit;}
     /* same idea as the column-width copy above: the title's top should land
        exactly where the real grid's own card tags sit, not at some guessed
        offset below the header that happens to look close.
-       This is now split across two properties instead of one: the box's
-       own top is moved down to the header's real bottom edge (so the native
+       This is split across two properties instead of one: the box's own
+       top is moved down to the header's real bottom edge (so the native
        scrollbar riding this box's edge starts there too, instead of running
        the full viewport height with its top few pixels hidden under the
        opaque sticky header) -- then padding-top makes up only whatever's
-       left between that and the tag row, so the title itself still lands on
-       the exact same line regardless of how tall the header currently is
-       (compact state, font metrics, mobile). */
+       left between that and the tag row, so the title itself still lands
+       on the exact same line regardless of font metrics or tier.
+
+       The header is fixed-height everywhere now (see .topbar's own
+       comment), so this can just read its real bottom edge directly --
+       no compact state to normalize away first. The gap itself is the
+       header's own margin-bottom, a fixed 14px in the stylesheet: every
+       essay gets the identical, deliberate gap every time, regardless of
+       where its cover card happens to sit in the grid. Mobile floors it
+       at 40px instead: 14px reads as the title stuck flush to the header
+       with no breathing room there, and there's no grid alignment worth
+       preserving on that tier's own 3-column layout anyway. */
     function syncEssayReaderTop(){
       var topbarEl = document.querySelector('.topbar');
-      /* the header shrinks to .compact past 24px of page scroll (see
-         updateTopbarCompact) -- whatever it happened to be at the exact
-         moment the essay was opened is what this was measuring, with no
-         normalization. A cover card sitting further down the grid (Paris,
-         scrolled well past that threshold) opened onto a visibly shorter
-         header than one near the top (Kaş) did, purely because of where
-         each trip happens to fall in the grid, not anything about the
-         essay itself. Forcing the expanded state before measuring -- the
-         same synchronous disable-transition/toggle-class/restore technique
-         the standalone About page used to use before it was folded into
-         this reader -- makes the essay's own layout independent of
-         whatever scroll position it happened to be opened from. Body
-         scroll is locked for as long as the essay stays open, so this
-         only has to run once per open; it's harmless to repeat on resize. */
-      topbarEl.style.transition = 'none';
-      topbarEl.classList.remove('compact');
-      void topbarEl.offsetHeight;
-      topbarEl.style.transition = '';
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
       essayReaderInner.style.top = headerBottom + 'px';
-      /* used to measure the real grid's OWN first tag and take the gap from
-         its live position -- which reads its actual on-screen coordinate,
-         and the grid scrolls with the page while the header doesn't. That
-         "matched the grid" only by coincidence, at scrollY 0: opening an
-         essay whose cover card sits further down the page (Paris, further
-         down than Kaş) left the page scrolled there, so the FIRST tag in
-         DOM order -- always the same element, wherever the essay was
-         actually opened from -- had long since scrolled out of view above
-         the header, at a wildly different (sometimes negative) position.
-         The number two different essays landed on depended on how far down
-         the grid each one's cover card happened to sit, not on anything
-         about the essay itself -- exactly the "not one consistent template"
-         inconsistency reported.
-
-         The real source of that gap was never the grid's live layout at
-         all: it's .topbar's own margin-bottom, a fixed 14px in the
-         stylesheet, unrelated to scroll position or which essay is open.
-         Reading it directly is both the fix and the simplification --
-         every essay gets the identical, deliberate gap the CSS actually
-         specifies, every time, regardless of scroll position when it was
-         opened. Mobile still floors it at 40px, same reasoning as before:
-         14px reads as the title stuck flush to the header with no
-         breathing room, and there's no grid alignment worth preserving on
-         that tier's own 3-column layout anyway. */
       var minGap = mobileQuery.matches ? 40 : 0;
       var structuralGap = parseFloat(getComputedStyle(topbarEl).marginBottom) || 0;
       essayReaderInner.style.paddingTop = Math.max(minGap, structuralGap) + 'px';
@@ -3345,25 +3315,6 @@ a{color:inherit;}
       essayReader.classList.remove('open');
       essayReader.setAttribute('aria-hidden','true');
       closePhotoLayer(true); /* a footnote photo left open over the text has nothing to sit over once the reader goes */
-      /* the header was forced expanded for as long as the essay was open
-         (see syncEssayReaderTop) regardless of the real page scroll
-         position, which never actually changed underneath it -- re-check
-         that real position now so a header opened from deep in the grid
-         shrinks back to compact instead of staying wrongly full-height.
-         Silent, not the plain scroll-driven call: this is catching the
-         header up to a position change that already happened while the
-         essay covered it, not reacting to a fresh scroll -- animating it
-         here would show as the header visibly jumping/resizing itself the
-         instant the essay closes, which is exactly the jitter the header's
-         own transition was never meant to produce outside of an actual
-         scroll gesture. */
-      if(window.updateTopbarCompact){
-        var topbarForRestore = document.querySelector('.topbar');
-        topbarForRestore.style.transition = 'none';
-        window.updateTopbarCompact();
-        void topbarForRestore.offsetHeight;
-        topbarForRestore.style.transition = '';
-      }
       if(currentEssayCode === 'ABOUT'){
         siteWordmark.classList.remove('planet-out');
         planetSpin.forceStop();
@@ -4520,8 +4471,6 @@ a{color:inherit;}
          your thumb while you scroll. Nothing below depends on the viewport's
          height, so a height-only resize has nothing to recompute. */
       if(!widthChanged && mobileQuery.matches) return;
-      updateTopbarCompact(); /* crossing the mobile breakpoint changes whether
-                                the header is allowed to shrink at all */
       syncViewerHeadMetrics();
       if(built) layoutFrames();
       lockWordWidth();
@@ -4531,35 +4480,7 @@ a{color:inherit;}
     }, 120);
   });
 
-  /* ---------- header shrinks flush to its text once you start scrolling ----------
-     Hysteresis (enter at 24px, exit at 4px) instead of one shared threshold:
-     a sticky header that changes height near scrollY≈0 nudges scrollY itself,
-     which can re-cross a single threshold and shake back and forth. */
   var topbarEl = document.querySelector('.topbar');
-  function updateTopbarCompact(){
-    /* mobile keeps the header at one fixed size — it's what the viewer's own
-       header is measured against, and a height that moves under your thumb
-       while you scroll isn't worth the few pixels it buys on a phone. The
-       class is left off entirely rather than merely neutralised in CSS, so
-       nothing downstream has to reason about a compact state that doesn't
-       apply. */
-    if(mobileQuery.matches){
-      topbarEl.classList.remove('compact');
-      return;
-    }
-    var y = window.scrollY;
-    var isCompact = topbarEl.classList.contains('compact');
-    if(!isCompact && y > 24){ topbarEl.classList.add('compact'); }
-    else if(isCompact && y < 4){ topbarEl.classList.remove('compact'); }
-  }
-  window.addEventListener('scroll', updateTopbarCompact, {passive:true});
-  updateTopbarCompact();
-  /* bridge for closeEssay (a separate closure) to re-sync the header's
-     compact/expanded state against the real, unchanged scroll position
-     once the essay closes -- see syncEssayReaderTop's own comment for why
-     it forces expanded WHILE open, which otherwise leaves the header
-     wrongly stuck expanded on a page that's still scrolled down. */
-  window.updateTopbarCompact = updateTopbarCompact;
 
   /* Close has to land exactly where Dark is, and the photo code beside it on
      the same line. Both of those are centred in a strip of --vhead, so
