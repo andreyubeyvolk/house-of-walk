@@ -186,9 +186,12 @@ a{color:inherit;}
   /* the curtain: same easing and the same upward exit as the viewer's
      shutter, so opening the site and closing a photograph are recognisably
      the same gesture. The delay lets the planet fade first, rather than
-     being sliced in half on its way out. */
+     being sliced in half on its way out. will-change promotes this to its
+     own compositor layer up front, so the very first thing the page does
+     isn't also the moment it discovers it needs one. */
   clip-path:inset(0 0 0 0);
   transition:clip-path .62s cubic-bezier(.76,0,.24,1) .16s;
+  will-change:clip-path;
 }
 .preloader-orb,
 .preloader-pct{transition:opacity .16s ease;}
@@ -439,6 +442,19 @@ a{color:inherit;}
   text-overflow:ellipsis;
   transition:background-color .15s ease, color .15s ease;
 }
+/* every card on the page has one of these, and this transition is the only
+   reason: hovering a single card should fade its tag smoothly. Flipping the
+   theme changes --paper/--ink on all ~460+ of them at once though, and a
+   transition that's cheap for one element firing alone is a genuinely
+   different cost when hundreds fire in the same frame -- profiling a real
+   theme-toggle click on this page measured that alone forcing multiple
+   whole-document style recalculations (color inherits, so did every other
+   untransitioned element's, but repainting ~460 *transitioning* boxes across
+   several animation frames instead of one was the actual multiplier).
+   body.theme-switching (set for one tick around the theme write, see
+   applyTheme) suppresses just this during that moment; hover keeps its
+   fade the rest of the time. */
+body.theme-switching .tag{ transition:none; }
 .cell:focus-visible .tag{background:var(--ink); color:var(--paper);}
 @media (hover:hover){
   .cell:hover .tag{background:var(--ink); color:var(--paper);}
@@ -570,6 +586,7 @@ a{color:inherit;}
   visibility:hidden;
   clip-path:inset(0 0 100% 0);
   transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear .6s;
+  will-change:clip-path;
 }
 .viewer.open{
   visibility:visible;
@@ -742,6 +759,7 @@ a{color:inherit;}
   visibility:hidden;
   clip-path:inset(0 0 100% 0);
   transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear .6s;
+  will-change:clip-path;
 }
 /* a light grain over the viewer/about wash — same turbulence texture as the
    photo loading state (#grainLoad), just this once permanent rather than
@@ -924,6 +942,7 @@ a{color:inherit;}
   visibility:hidden;
   clip-path:inset(0 0 100% 0);
   transition:clip-path .6s cubic-bezier(.76,0,.24,1), visibility 0s linear .6s;
+  will-change:clip-path;
 }
 .photolay.open{
   visibility:visible;
@@ -2064,7 +2083,7 @@ a{color:inherit;}
           "Churches and cathedrals. We visited several places in the center, and each struck us in its own way. The first, if I remember right, was a walk to the Sacré-Cœur Basilica[0001]. Wandering those same small, artsy little streets, imagining how artists used to hang out here. The church sits on a hill, from which you can see the whole city and, in the distance, the Eiffel Tower—what a wonder! There it was, way out there! How beautiful—we shouted with joy! The church reminded me of something out of Disciples II. So atmospheric, so religious, so powerful and beautiful! But as soon as (the next day, I think) we reached the Church of Saint-Eustache[0005]—I honestly nearly cried at the sight of it. For the first time in my life, I saw a real Gothic cathedral. I have to say, I love the aesthetic of the late Middle Ages, the vibe of real goth rock (in the style of The Sisters of Mercy), and this whole gothic, graveyard, romantic thing. It's about poets, about the sublime, about creation. So I was simply floored by the sight, the darkness, the height of the church[0010]. It rises skyward in arrows of lines[0014]. A million lines and details. Simply breathtaking.",
           "On the way toward the deeper center and the river, we stumbled on the Church of Saint-Germain-l'Auxerrois[0016]. Purely by accident, just passing by. A magical Gothic church. A bit stockier, but just as slender and pointed-arched, with gorgeous vaults and arches[0021]. I'm at a loss for words: I wanted to photograph every corner, every arch. As you can imagine, there's a special, peaceful atmosphere in temples and churches. Even if God is one (Brahman), and you don't need a particular place to connect with him, you still feel an elevated sense of uplift in places like this, and you feel a little closer to God, to the sublime and the cosmic.",
           "The next church is Église du Saint-Esprit (the Church of the Holy Spirit)[0025]. Also a random find, just out walking. It's different from the others in its massiveness and brutality. Inside, there was a sense of something more pagan, powerful and strong[0026]. Some kind of… energy closer to Norse gods. That's no surprise: massive, wide partitions and vaults. A bit less detail, and at least not the same abundance of vertical lines you get in Gothic architecture.",
-          "And of course, Notre-Dame. Which, honestly, didn't move me the way the Church of Saint-Eustache did. It's new, bright, tidy. You don't feel the wear of time, the value of old materials that have stood here for centuries. Gothic, arched, beautiful[0035]. But it lacks that dark, moody vibe. I really loved the identity design tied to the cathedral, though. First, at the entrance, a logo made of lines arranged like rays of sun radiating from the cathedral. Then, inside, a poster caught my eye—honoring the Holy Crown of Thorns of Christ[0034]. Notice the beautifully refined logo and custom typeface. As if made from the crown of thorns itself."
+          "And of course, Notre-Dame. Which, honestly, didn't move me the way the Church of Saint-Eustache did. It's new, bright, tidy. You don't feel the wear of time, the value of old materials that have stood here for centuries. Gothic, arched, beautiful[0035]. But it lacks that dark, moody vibe. I really loved the identity design tied to the cathedral, though. First, at the entrance, a logo made of lines arranged like rays of sun radiating from the cathedral[0029]. Then, inside, a poster caught my eye—honoring the Holy Crown of Thorns of Christ[0034]. Notice the beautifully refined logo and custom typeface. As if made from the crown of thorns itself."
         ]},
         {sub:"The Eiffel Tower", body:[
           "Now, what about the Eiffel Tower? It's gigantic[0039]. It looks incredible both from afar and up close. Crowds everywhere. A landmark moment. And even when you approach it through the side streets and only catch it through the trees—that alone is already atmospheric and memorable[0037]. You walk toward it closer and closer, full of anticipation, through streets and trees."
@@ -2994,13 +3013,36 @@ a{color:inherit;}
   /* ---------- theme toggle ---------- */
   var root = document.documentElement;
   var themeToggle = document.getElementById('themeToggle');
+  var themeSwitchTimer = null;
   function applyTheme(t){
+    /* suppresses .tag's own hover transition (see its CSS comment) for just
+       this moment -- otherwise every card's tag on the page fades in step,
+       which is a completely different, much bigger cost than the one card
+       a hover ever touches. 300ms outlasts every transition this class
+       gates (.tag's own .15s, .topbar's .25s), so nothing gets caught
+       mid-fade and snapped. */
+    document.body.classList.add('theme-switching');
+    clearTimeout(themeSwitchTimer);
+    themeSwitchTimer = setTimeout(function(){
+      document.body.classList.remove('theme-switching');
+    }, 300);
     if(t === 'dark'){ root.setAttribute('data-theme','dark'); themeToggle.textContent = 'Light'; }
     else { root.removeAttribute('data-theme'); themeToggle.textContent = 'Dark'; }
     /* Dark/Light have different letter counts, so the toggle's own content
        width changes — that shifts the flex row's space-between distribution,
-       which is exactly what the tagline offset was measured against. */
-    alignTagline();
+       which is exactly what the tagline offset was measured against.
+
+       data-theme cascades a color/background-color change to every element
+       on the page — thousands of them — so alignTagline's own read (inside
+       alignToColumn: getBoundingClientRect right after a position/left
+       write) was forcing the browser to synchronously flush that entire
+       recolor just to answer it, mid-click. Profiling a real click on this
+       button measured that single read costing over a second of blocked
+       main-thread time on this page's DOM size. Deferring one frame lets
+       the recolor ride the browser's own next paint instead of demanding
+       an early one — still repositions before the eye can register it,
+       just off the clock that counts against input responsiveness. */
+    requestAnimationFrame(alignTagline);
   }
   var savedTheme = null;
   try{ savedTheme = localStorage.getItem('how-theme'); }catch(e){}
@@ -3218,9 +3260,22 @@ a{color:inherit;}
          horizontal scrollbar at the bottom actually was. Subtracting the
          scrollbar's own measured width from the padding — rather than
          shrinking the grid — keeps the scrollbar sitting inside the normal
-         var(--pad) margin instead of cutting into real column space. */
-      var scrollbarW = essayReaderInner.offsetWidth - essayReaderInner.clientWidth;
-      essayReaderInner.style.paddingRight = 'calc(var(--pad) - '+scrollbarW+'px)';
+         var(--pad) margin instead of cutting into real column space.
+
+         Whether the scrollbar is even showing depends on the box's real
+         content height, which the three writes just above only just set —
+         so this read can't simply move above them, it's a genuine
+         after-the-write measurement. Reading it back synchronously right
+         here forces the browser to flush the layout those writes just
+         invalidated, on a page with thousands of DOM nodes (profiling
+         showed exactly this shape of read costing 90-160ms). Deferring it
+         one frame lets it ride the browser's own next paint instead of
+         demanding an extra one — invisible to the eye, free on the clock
+         that actually counts for responsiveness (INP). */
+      requestAnimationFrame(function(){
+        var scrollbarW = essayReaderInner.offsetWidth - essayReaderInner.clientWidth;
+        essayReaderInner.style.paddingRight = 'calc(var(--pad) - '+scrollbarW+'px)';
+      });
       essayReaderInner.setAttribute('data-cols', n);
     }
 
@@ -3246,10 +3301,14 @@ a{color:inherit;}
        preserving on that tier's own 3-column layout anyway. */
     function syncEssayReaderTop(){
       var topbarEl = document.querySelector('.topbar');
+      /* both reads happen before either write -- reading marginBottom AFTER
+         writing top would force the browser to flush layout early just to
+         answer it, and on this page's DOM size that flush alone measured
+         90-160ms in profiling (see Optimize DOM size / Forced reflow). */
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
+      var structuralGap = parseFloat(getComputedStyle(topbarEl).marginBottom) || 0;
       essayReaderInner.style.top = headerBottom + 'px';
       var minGap = mobileQuery.matches ? 40 : 0;
-      var structuralGap = parseFloat(getComputedStyle(topbarEl).marginBottom) || 0;
       essayReaderInner.style.paddingTop = Math.max(minGap, structuralGap) + 'px';
     }
 
@@ -3844,6 +3903,14 @@ a{color:inherit;}
      --pad only ever changes with viewport width, so the cached value only
      needs invalidating on resize (see that handler below), not per call. */
   var cachedDeskPad = null;
+  /* the .tag/.vclose text-baseline correction layoutFrames measures below --
+     same idea as cachedDeskPad just above: the gap is a font-metrics/layout
+     constant for a given breakpoint, not something that changes from one
+     opened photo to the next, so re-measuring it on every openViewer() call
+     was paying a forced-reflow cost (getBoundingClientRect right after the
+     position/top reset that has to precede it) for a number that hadn't
+     actually changed. Invalidated alongside cachedDeskPad on resize. */
+  var cachedVcloseTextGap = null;
   function getDeskPad(){
     if(mobileQuery.matches) return 0;
     if(cachedDeskPad === null){
@@ -3909,7 +3976,7 @@ a{color:inherit;}
 
     hLerp = makeLerp(
       function(){ return filmrow.scrollLeft; },
-      function(v){ filmrow.scrollLeft = v; updateThumb(); },
+      function(v){ filmrow.scrollLeft = v; updateThumb(getFilmrowMetrics()); },
       0.133
     );
 
@@ -4002,6 +4069,10 @@ a{color:inherit;}
   }
 
   function layoutFrames(){
+    /* every frame's width/position and the track's own width are about to
+       be (re)computed below -- any {bounds, trackW, viewW} snapshot handed
+       out by getFilmrowMetrics() before this point is now stale. */
+    filmrowMetricsCache = null;
     /* mobile: both halves of the viewer header size themselves off --vhead,
        which is the measured site-header height — refresh it before anything
        reads it. No per-frame measurement is involved on that tier at all,
@@ -4052,10 +4123,13 @@ a{color:inherit;}
          with no box-model/line-height involvement, so it isn't subject to
          the same rounding — nudge the text itself rather than its box. */
       vcloseTextEl.style.position = 'relative';
-      vcloseTextEl.style.top = '0px';
-      var tagTextTop = tagTextEl.getBoundingClientRect().top;
-      var vcloseTextTop = vcloseTextEl.getBoundingClientRect().top;
-      vcloseTextEl.style.top = (tagTextTop - vcloseTextTop)+'px';
+      if(cachedVcloseTextGap === null){
+        vcloseTextEl.style.top = '0px';
+        var tagTextTop = tagTextEl.getBoundingClientRect().top;
+        var vcloseTextTop = vcloseTextEl.getBoundingClientRect().top;
+        cachedVcloseTextGap = tagTextTop - vcloseTextTop;
+      }
+      vcloseTextEl.style.top = cachedVcloseTextGap+'px';
     }
 
     if(mobileQuery.matches){
@@ -4091,14 +4165,16 @@ a{color:inherit;}
     updateThumb();
   }
 
-  /* cached is the same {bounds, trackW, viewW} the active drag below
-     computed once at mousedown -- passed straight through here rather than
-     re-measured, since re-measuring per mousemove (offsetLeft/clientWidth
-     reads right after a scrollLeft write) is exactly what was forcing a
-     synchronous layout recalculation on every single one of them. Every
-     other caller (resize, wheel, opening a new photo) still omits it and
-     gets a fresh measurement -- correct is what matters there, not fast,
-     and none of them run anywhere near drag frequency. */
+  /* cached is the same {bounds, trackW, viewW} shape either the active drag
+     below (a snapshot for one gesture, via dragCache) or hLerp's own glide
+     (a snapshot for the current layout pass, via getFilmrowMetrics) passes
+     straight through here rather than letting this re-measure -- re-
+     measuring per mousemove/animation-frame (offsetLeft/clientWidth reads
+     right after a scrollLeft write) is exactly what was forcing a
+     synchronous layout recalculation on every single one of them. Plain,
+     one-off callers (resize, opening a new photo) still omit it and get a
+     fresh measurement -- correct is what matters there, not fast, and none
+     of them run anywhere near per-frame frequency. */
   function updateThumb(cached){
     var trackW = cached ? cached.trackW : hsTrack.clientWidth;
     var viewW = cached ? cached.viewW : filmrow.clientWidth;
@@ -4408,6 +4484,24 @@ a{color:inherit;}
      (nothing resizes while you're holding the mouse down), so a snapshot
      from the start of the gesture stays correct for the whole thing. */
   var dragCache = null;
+  /* same {bounds, trackW, viewW} shape, but scoped to the current photo/
+     layout pass rather than a single drag gesture -- hLerp's own setPos
+     (below) runs this on every animation frame of a wheel/trackpad glide,
+     easily dozens of times in a single scroll, and re-measuring on each one
+     (the scrollLeft write immediately followed by an offsetLeft/clientWidth
+     read) forced a synchronous layout on every single frame. Profiling this
+     page for real (DevTools Performance, Forced reflow insight) showed this
+     exact call site costing over 500ms across one test session -- the same
+     class of cost dragCache above already solved for mouse-drag, just in
+     the wheel-glide path, which never got the same fix. Invalidated in
+     layoutFrames, since that's the only thing that changes what it holds. */
+  var filmrowMetricsCache = null;
+  function getFilmrowMetrics(){
+    if(!filmrowMetricsCache){
+      filmrowMetricsCache = {bounds: getFilmrowBounds(), trackW: hsTrack.clientWidth, viewW: filmrow.clientWidth};
+    }
+    return filmrowMetricsCache;
+  }
   function startDrag(mode, clientX){
     dragMode = mode;
     dragStartX = clientX;
@@ -4514,6 +4608,9 @@ a{color:inherit;}
       /* --pad is width-based (clamp(16px,4vw,40px)) -- the cached probe
          result from getDeskPad() is now stale */
       cachedDeskPad = null;
+      /* a width change can cross the mobile/tablet/desktop breakpoints,
+         which is exactly what the .tag/.vclose gap is measured per */
+      cachedVcloseTextGap = null;
     }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
