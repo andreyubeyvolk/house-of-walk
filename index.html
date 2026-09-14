@@ -1391,7 +1391,7 @@ body.theme-switching .tag{ transition:none; }
   </div>
   <div class="tagline">
     <div>A personal archive</div>
-    <div>Ricoh GRIII</div>
+    <div>Ricoh GRIII <span id="photoCount"></span></div>
   </div>
   <button class="theme-toggle plate-btn" id="themeToggle" type="button">Dark</button>
 </header>
@@ -2018,6 +2018,20 @@ body.theme-switching .tag{ transition:none; }
       });
     });
   });
+
+  /* the count in the header tagline -- computed, not hand-typed, so it
+     never quietly drifts out of date the next time a trip's photos are
+     added or trimmed. Counts real photos only (entries with an actual
+     img), same distinction "isReal" makes above -- essay covers aren't in
+     ARCHIVE at all (see ESSAYS below), so they're already excluded. Runs
+     before alignTagline() (later in this script) sizes the header off
+     this element's own width, so the real, final text is what gets
+     measured, not a placeholder. */
+  var photoCountEl = document.getElementById('photoCount');
+  if(photoCountEl){
+    var realPhotoCount = ARCHIVE.filter(function(f){ return f.img; }).length;
+    photoCountEl.textContent = '['+pad(realPhotoCount)+'IMG]';
+  }
 
   /* essay covers: one per trip, inserted as the trip's own first grid cell
      (see gridHtml below). Sections are TODO placeholders — swap in the real
