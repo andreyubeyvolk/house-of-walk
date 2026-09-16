@@ -573,11 +573,43 @@ body.theme-switching .tag{ transition:none; }
   transition:opacity .95s ease;
   pointer-events:none;
 }
-/* all three sit on top of .ph-full in the DOM, so this is what fades them
+/* three dots, lighting up one after another and looping, sitting dead
+   centre of the loading state -- the same quiet "still working on it"
+   read as the blinds/tint/grain around it, just legible as text instead
+   of texture. Same font as the header's own tagline (the site's one
+   monospace stack), not something borrowed from elsewhere. .6 opacity is
+   the ceiling each dot animates up to, not a flat constant -- multiplying
+   a 0-1 keyframe against a .6 container is what keeps the whole thing
+   reading as "barely there" rather than a bold loading spinner. */
+.ph-loading-label{
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  gap:.2em;
+  font-family:'Spline Sans Mono','SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  font-size:var(--ui-size);
+  color:var(--ink);
+  opacity:.6;
+  transition:opacity .95s ease;
+  pointer-events:none;
+}
+.ph-loading-label span{
+  opacity:0;
+  animation:phDotPulse 1.2s ease-in-out infinite;
+}
+.ph-loading-label span:nth-child(2){animation-delay:.2s;}
+.ph-loading-label span:nth-child(3){animation-delay:.4s;}
+@keyframes phDotPulse{
+  0%, 80%, 100%{opacity:0;}
+  40%{opacity:1;}
+}
+/* all four sit on top of .ph-full in the DOM, so this is what fades them
    out together with it once the real photo has loaded */
 .ph-full.loaded ~ .ph-blinds,
 .ph-full.loaded ~ .ph-tint,
-.ph-full.loaded ~ .ph-grain{opacity:0;}
+.ph-full.loaded ~ .ph-grain,
+.ph-full.loaded ~ .ph-loading-label{opacity:0;}
 .grid .ph{opacity:.9;transition:opacity .2s ease;}
 :root[data-theme="dark"] .grid .ph{opacity:.85;}
 .grid .grain.noise{opacity:.02;transition:opacity .2s ease;}
@@ -2346,7 +2378,8 @@ body.theme-switching .tag{ transition:none; }
       + '<img class="ph-full" src="'+f.img+'" loading="lazy" fetchpriority="low" alt="'+f.alt+'">'
       + '<i class="ph-blinds"></i>'
       + '<i class="ph-tint"></i>'
-      + '<i class="ph-grain"></i>';
+      + '<i class="ph-grain"></i>'
+      + '<span class="ph-loading-label" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
     return '<div class="'+cls+'">'+img+'</div>';
   }
 
