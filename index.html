@@ -165,6 +165,19 @@ body{
   overscroll-behavior-y:none;
   transition:background-color .25s ease, color .25s ease;
 }
+/* background-color/color aren't compositor properties -- the browser has
+   to repaint actual pixels every frame of the transition, and the cost
+   scales with how much area is painted. body's is the whole page (way
+   more than .topbar's one thin strip), so under any real CPU pressure the
+   two visibly fall out of step with each other -- the exact same shape of
+   bug .tag's own theme-switching override already fixed, just for the two
+   biggest painted areas on the page instead of ~460 small ones. Snapping
+   both instantly during the switch (see applyTheme) reads as "the theme
+   changed" just as clearly as a fade did, without a fade's per-frame
+   repaint bill or the desync that bill causes once the frame budget's
+   gone. */
+body.theme-switching,
+body.theme-switching .topbar{ transition:none; }
 button{font:inherit;color:inherit;}
 a{color:inherit;}
 :focus-visible{outline:2px solid var(--ink); outline-offset:2px;}
