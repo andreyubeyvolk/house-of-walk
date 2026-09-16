@@ -577,9 +577,9 @@ body.theme-switching .tag{ transition:none; }
    centre of the loading state -- the same quiet "still working on it"
    read as the blinds/tint/grain around it, just legible as text instead
    of texture. Same font as the header's own tagline (the site's one
-   monospace stack), not something borrowed from elsewhere. .6 opacity is
+   monospace stack), not something borrowed from elsewhere. .7 opacity is
    the ceiling each dot animates up to, not a flat constant -- multiplying
-   a 0-1 keyframe against a .6 container is what keeps the whole thing
+   a 0-1 keyframe against a .7 container is what keeps the whole thing
    reading as "barely there" rather than a bold loading spinner. */
 .ph-loading-label{
   position:absolute;
@@ -588,9 +588,9 @@ body.theme-switching .tag{ transition:none; }
   display:flex;
   gap:.2em;
   font-family:'Spline Sans Mono','SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
-  font-size:var(--ui-size);
+  font-size:calc(var(--ui-size) * 1.2);
   color:var(--ink);
-  opacity:.6;
+  opacity:.7;
   transition:opacity .95s ease;
   pointer-events:none;
 }
