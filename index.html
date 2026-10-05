@@ -1,6 +1,6 @@
 <html lang="en">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>House of Walk</title>
 <meta name="description" content="A personal photo archive by Andrey Ubeyvolk.">
 <link rel="canonical" href="https://houseofwalk.org/">
@@ -369,7 +369,9 @@ a{color:inherit;}
   justify-content:space-between;
   align-items:flex-start;
   gap:14px;
-  padding:24px var(--pad) 18px;
+  /* max() so non-notch devices keep their 24px while notched iPhones push the
+     content below the status bar / Dynamic Island safe area */
+  padding:max(24px,calc(env(safe-area-inset-top) + 8px)) var(--pad) 18px;
   margin-bottom:14px;
   transition:background-color .25s ease;
 }
@@ -533,7 +535,7 @@ body.theme-switching .tag{ transition:none; }
    covers it at opacity:1, what's happening underneath no longer matters.
    Tuned on a live parameter bench rather than guessed — see
    loading-effect-tuner.html in the project root. */
-.ph-thumb{filter:blur(18px); transform:scale(1.05);}
+.ph-thumb{filter:blur(18px);-webkit-filter:blur(18px); transform:scale(1.05) translateZ(0);-webkit-transform:scale(1.05) translateZ(0);}
 .ph-full{opacity:0;transition:opacity .95s ease;}
 .ph-full.loaded{opacity:1;}
 /* the slats: a repeating gradient rather than actual stripe elements, blurred
@@ -642,8 +644,10 @@ body.theme-switching .tag{ transition:none; }
      sub-pixel seam at one edge where whatever's behind it (the grid, in
      this case, which is darker) shows through as a thin line. A couple of
      px of harmless overscan below the visible area removes the seam
-     entirely instead of trying to hit the edge exactly. */
-  bottom:-2px;
+     entirely instead of trying to hit the edge exactly.
+     env(safe-area-inset-bottom) extends past the iOS home-indicator area so
+     the viewer background covers the full physical screen with viewport-fit:cover. */
+  bottom:calc(-2px - env(safe-area-inset-bottom));
   /* translucent everywhere (not just mobile): the empty padding space
      around the first/last photo, and any gap between photos, reads as the
      same editorial layering as the essay page — the grid faintly visible
@@ -1149,7 +1153,7 @@ body.theme-switching .tag{ transition:none; }
      "exactly as tall as the header" can't be expressed in CSS when the
      header's height comes from font metrics. */
   :root{
-    --head-pt:24px;
+    --head-pt:max(24px,calc(env(safe-area-inset-top) + 8px));
     /* both are overwritten by syncViewerHeadMetrics with exact measured
        values; these are just close enough that nothing jumps visibly in the
        frame before the first measurement lands */
@@ -3952,9 +3956,12 @@ body.theme-switching .tag{ transition:none; }
     0.114
   );
   document.getElementById('toTopBtn').addEventListener('click', function(){
-    vLerp.set(0);
     playWhoosh('open', {rough:true, vol:0.0112});
     gcEvent('totop/click', 'To top clicked');
+    /* native smooth scroll is compositor-threaded and unaffected by main-thread
+       load (image decode, layout) — much more reliable on iOS than the rAF
+       lerp, which stalls when the main thread is busy loading images */
+    window.scrollTo({top:0, behavior:'smooth'});
   });
 
   var bylineLink = document.querySelector('.byline-link');
@@ -3989,6 +3996,9 @@ body.theme-switching .tag{ transition:none; }
     var aboutIsOpen = document.getElementById('essayReader').classList.contains('open');
     if(!viewer.classList.contains('open') && !aboutIsOpen){
       vLerp.stop();
+      /* also interrupt any native smooth-scroll (To Top button) that may be
+         in flight — calling scrollTo without behavior cancels it */
+      window.scrollTo(0, window.scrollY);
     }
   }, {passive:true});
 
@@ -4162,7 +4172,12 @@ body.theme-switching .tag{ transition:none; }
 
     watchPhImages(filmrow);
     filmrow.querySelectorAll('.ph-full').forEach(function(fullImg){
-      if(fullImg.complete){ fullImg.classList.add('loaded'); }
+      if(fullImg.complete){
+        /* defer by one frame so the element is first painted at opacity:0,
+           allowing the 0.95s fade-in transition to actually run on iOS
+           (adding .loaded in the same sync task as DOM insertion skips it) */
+        requestAnimationFrame(function(){ fullImg.classList.add('loaded'); });
+      }
       else { fullImg.addEventListener('load', function(){ fullImg.classList.add('loaded'); }); }
     });
 
@@ -4500,8 +4515,12 @@ body.theme-switching .tag{ transition:none; }
        page's real extent) — cache the true value now, before locking, for
        syncGridScrollToOpenFrame to use for the rest of this viewer session. */
     lockedPageMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    viewer.classList.add('open');
-    viewer.setAttribute('aria-hidden','false');
+    /* do all heavy layout work BEFORE starting the clip-path animation.
+       On iOS, clip-path transitions run on the main thread; doing layout
+       immediately after classList.add('open') stalls the animation and makes
+       it look abrupt. body.overflow and layoutFrames run with the viewer still
+       visibility:hidden — position:fixed elements have the same real dimensions
+       in both states, so all measurements come back correct. */
     document.body.style.overflow = 'hidden';
     layoutFrames();
     var target = filmrow.querySelector('[data-gi="'+gi+'"]');
@@ -4572,6 +4591,9 @@ body.theme-switching .tag{ transition:none; }
        they may have swiped somewhere else entirely. Just warm the next
        photo the same way every subsequent swipe does. */
     prefetchAroundCurrent();
+    /* layout and scroll-positioning are now complete — start the animation */
+    viewer.classList.add('open');
+    viewer.setAttribute('aria-hidden','false');
     playWhoosh('open');
 
     viewerScrollUsedThisSession = false;
