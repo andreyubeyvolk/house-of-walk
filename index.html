@@ -376,6 +376,15 @@ a{color:inherit;}
   margin-bottom:14px;
   transition:background-color .25s ease;
 }
+/* when the essay reader is open the topbar sits above its translucent blurred
+   overlay — its solid paper background reads as a jarring white stripe.
+   Match the same frosted-glass treatment the reader itself uses so the header
+   feels like part of the same surface rather than a separate opaque element. */
+:root:has(.about.open) .topbar{
+  background:color-mix(in srgb, var(--paper) var(--about-bg-pct), transparent);
+  backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+  -webkit-backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+}
 .word{
   flex:0 0 auto;
   display:flex;
