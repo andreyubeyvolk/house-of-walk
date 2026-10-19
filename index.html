@@ -4756,13 +4756,14 @@ body.theme-switching .tag{ transition:none; }
          there is nothing to reopen or restore. Only two things must NOT
          happen: body scroll must stay locked (that overlay is still up), and
          no scrollTop write, which would only fight what's already correct. */
+      document.documentElement.style.scrollbarGutter = '';
       playWhoosh('close');
       return;
     }
+    document.documentElement.style.scrollbarGutter = '';
     playWhoosh('close');
     setTimeout(function(){
       document.body.style.overflow = '';
-      document.documentElement.style.scrollbarGutter = '';
     }, 520);
   }
 
