@@ -639,7 +639,7 @@ body.theme-switching .tag{ transition:none; }
 
 /* ---------- viewer ---------- */
 .viewer{
-  position:fixed;top:0;left:0;right:0;
+  position:fixed;top:0;left:0;right:calc(-1 * var(--sb-gutter, 0px));
   /* 2px past the true bottom edge instead of inset:0 — on some mobile
      screens a position:fixed element flush with the viewport can leave a
      sub-pixel seam at one edge where whatever's behind it (the grid, in
@@ -673,7 +673,7 @@ body.theme-switching .tag{ transition:none; }
 }
 
 .vclose{
-  position:fixed;top:0;right:0;
+  position:fixed;top:0;right:calc(-1 * var(--sb-gutter, 0px));
   padding:0;
   z-index:20;
   /* a <button>, even after all:unset, can still resolve line-height:normal
@@ -775,7 +775,7 @@ body.theme-switching .tag{ transition:none; }
 .frame.expanded .ph.zoomable{cursor:zoom-out;}
 
 .hscroll{
-  position:fixed;left:0;right:0;bottom:0;
+  position:fixed;left:0;right:calc(-1 * var(--sb-gutter, 0px));bottom:0;
   height:14px;
   display:flex;
   z-index:15;
@@ -1489,6 +1489,15 @@ body.theme-switching .tag{ transition:none; }
 
 <script>
 (function(){
+  /* Measure the classic scrollbar width once on load (before any overflow:hidden
+     locks body scroll). Fixed elements use right:0 relative to the CSS layout
+     viewport, which excludes the scrollbar track — scrollbar-gutter:stable keeps
+     that 14px gutter visible as a white strip. Store it so CSS can correct for it. */
+  (function(){
+    var sbW = window.innerWidth - document.documentElement.clientWidth;
+    if(sbW > 0) document.documentElement.style.setProperty('--sb-gutter', sbW + 'px');
+  })();
+
   var AR = {p:2/3, l:1.5, sq:1};
   var LAND_THRESHOLD = 1.05;
 
