@@ -379,11 +379,18 @@ a{color:inherit;}
 /* when the essay reader is open the topbar sits above its translucent blurred
    overlay — its solid paper background reads as a jarring white stripe.
    Match the same frosted-glass treatment the reader itself uses so the header
-   feels like part of the same surface rather than a separate opaque element. */
+   feels like part of the same surface rather than a separate opaque element.
+   backdrop-filter is desktop-only: on iOS Safari it creates a GPU compositing
+   layer that can render above position:fixed elements with higher z-indexes
+   (known WebKit stacking bug), showing as a white strip over the photo viewer. */
 :root:has(.about.open) .topbar{
   background:color-mix(in srgb, var(--paper) var(--about-bg-pct), transparent);
-  backdrop-filter:blur(var(--bg-blur)) saturate(.85);
-  -webkit-backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+}
+@media (hover:hover){
+  :root:has(.about.open) .topbar{
+    backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+    -webkit-backdrop-filter:blur(var(--bg-blur)) saturate(.85);
+  }
 }
 .word{
   flex:0 0 auto;
@@ -648,7 +655,7 @@ body.theme-switching .tag{ transition:none; }
 
 /* ---------- viewer ---------- */
 .viewer{
-  position:fixed;top:0;left:0;right:calc(-1 * var(--sb-gutter, 0px));
+  position:fixed;top:0;left:0;right:0;
   /* 2px past the true bottom edge instead of inset:0 — on some mobile
      screens a position:fixed element flush with the viewport can leave a
      sub-pixel seam at one edge where whatever's behind it (the grid, in
@@ -682,7 +689,7 @@ body.theme-switching .tag{ transition:none; }
 }
 
 .vclose{
-  position:fixed;top:0;right:calc(-1 * var(--sb-gutter, 0px));
+  position:fixed;top:0;right:0;
   padding:0;
   z-index:20;
   /* a <button>, even after all:unset, can still resolve line-height:normal
@@ -784,7 +791,7 @@ body.theme-switching .tag{ transition:none; }
 .frame.expanded .ph.zoomable{cursor:zoom-out;}
 
 .hscroll{
-  position:fixed;left:0;right:calc(-1 * var(--sb-gutter, 0px));bottom:0;
+  position:fixed;left:0;right:0;bottom:0;
   height:14px;
   display:flex;
   z-index:15;
@@ -1498,15 +1505,6 @@ body.theme-switching .tag{ transition:none; }
 
 <script>
 (function(){
-  /* Measure the classic scrollbar width once on load (before any overflow:hidden
-     locks body scroll). Fixed elements use right:0 relative to the CSS layout
-     viewport, which excludes the scrollbar track — scrollbar-gutter:stable keeps
-     that 14px gutter visible as a white strip. Store it so CSS can correct for it. */
-  (function(){
-    var sbW = window.innerWidth - document.documentElement.clientWidth;
-    if(sbW > 0) document.documentElement.style.setProperty('--sb-gutter', sbW + 'px');
-  })();
-
   var AR = {p:2/3, l:1.5, sq:1};
   var LAND_THRESHOLD = 1.05;
 
@@ -4635,6 +4633,7 @@ body.theme-switching .tag{ transition:none; }
        it look abrupt. body.overflow and layoutFrames run with the viewer still
        visibility:hidden — position:fixed elements have the same real dimensions
        in both states, so all measurements come back correct. */
+    document.documentElement.style.scrollbarGutter = 'auto';
     document.body.style.overflow = 'hidden';
     layoutFrames();
     var target = filmrow.querySelector('[data-gi="'+gi+'"]');
@@ -4763,6 +4762,7 @@ body.theme-switching .tag{ transition:none; }
     playWhoosh('close');
     setTimeout(function(){
       document.body.style.overflow = '';
+      document.documentElement.style.scrollbarGutter = '';
     }, 520);
   }
 
