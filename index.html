@@ -637,6 +637,15 @@ body.theme-switching .tag{ transition:none; }
 .ph-full.loaded ~ .ph-loading-label{opacity:0;}
 .grid .ph{opacity:.9;transition:opacity .2s ease;}
 :root[data-theme="dark"] .grid .ph{opacity:.85;}
+/* essay cards sit brighter than photo cards at rest */
+.grid .cell.essay-cover .ph{opacity:.95;}
+:root[data-theme="dark"] .grid .cell.essay-cover .ph{opacity:.9;}
+/* touch screens and tablets never get a hover, so the resting state is the
+   only state they ever see: every card gets the brighter values */
+@media (hover:none){
+  .grid .ph{opacity:.95;}
+  :root[data-theme="dark"] .grid .ph{opacity:.9;}
+}
 .grid .grain.noise{opacity:.02;transition:opacity .2s ease;}
 /* a faint echo of the viewer's loading state (blinds + lifted tint) on every
    grid preview, scaled to ~30% of the viewer's slat size to match a thumb's
@@ -654,7 +663,8 @@ body.theme-switching .tag{ transition:none; }
   pointer-events:none;
 }
 @media (hover:hover){
-  .grid .cell:hover .ph{opacity:1;}
+  .grid .cell:hover .ph,
+  .grid .cell.essay-cover:hover .ph{opacity:1;}
   .grid .cell:hover .grain.noise{opacity:0;}
   .grid .cell:not(.essay-cover):hover .ph.real::before{opacity:0;}
 }
@@ -2387,7 +2397,7 @@ body.theme-switching .tag{ transition:none; }
       title:'Essay on Yangshuo',
       subtitle:'Somewhere between the peaks and peace',
       cardLabel:'Essay on Yangshuo',
-      cover:'photos/essays/yangshuo-2.webp',
+      cover:'photos/essays/yangshuo-3.webp',
       coverAr:0.675,
       sections:[
         {sub:"Not Sure", body:[
