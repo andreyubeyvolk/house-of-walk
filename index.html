@@ -4562,6 +4562,7 @@ body.theme-switching .tag{ transition:none; }
      Repositioning the grid is now a single hard jump at close time only,
      hidden under the closing shutter, never live. */
   var lockedPageMaxScroll = 0;
+  var VIEWER_SHUTTER_MS = 680; /* .viewer's clip-path transition is .6s, plus slack */
   /* The viewer hides the page scrollbar AND its reserved gutter so the photos
      run to the true screen edge. Dropping the gutter alone would widen the
      page by the scrollbar's width and reflow the grid behind the viewer
@@ -4812,15 +4813,21 @@ body.theme-switching .tag{ transition:none; }
          there is nothing to reopen or restore. Only two things must NOT
          happen: body scroll must stay locked (that overlay is still up), and
          no scrollTop write, which would only fight what's already correct. */
-      unlockGutter();
       playWhoosh('close');
+      setTimeout(function(){
+        if(!viewer.classList.contains('open')) unlockGutter();
+      }, VIEWER_SHUTTER_MS);
       return;
     }
     playWhoosh('close');
+    /* the page's scrollbar (and the gutter it lives in) comes back only
+       after the shutter has fully retracted: any earlier and the viewport
+       narrows under the still-visible Close button and it jumps left. */
     setTimeout(function(){
+      if(viewer.classList.contains('open')) return;
       document.body.style.overflow = '';
       unlockGutter();
-    }, 520);
+    }, VIEWER_SHUTTER_MS);
   }
 
   grid.addEventListener('click', function(e){
