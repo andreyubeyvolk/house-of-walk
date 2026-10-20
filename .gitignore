@@ -8,3 +8,7 @@
 /Контекст проекта — для эссе.md
 /Поиск тормозов сайта — методика.md
 /Эссе/
+
+# buffer for new content (Claude processes and clears it)
+/_inbox/*
+!/_inbox/README.md
