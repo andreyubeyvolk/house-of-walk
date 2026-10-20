@@ -376,27 +376,14 @@ a{color:inherit;}
   margin-bottom:14px;
   transition:background-color .25s ease;
 }
-/* when the essay reader is open the topbar sits above its translucent blurred
-   overlay — its solid paper background reads as a jarring white stripe.
-   Match the same frosted-glass treatment the reader itself uses so the header
-   feels like part of the same surface rather than a separate opaque element.
-   backdrop-filter is desktop-only: on iOS Safari it creates a GPU compositing
-   layer that can render above position:fixed elements with higher z-indexes
-   (known WebKit stacking bug), showing as a white strip over the photo viewer. */
+/* the essay reader's scroll area starts BELOW the header (see
+   essayReaderInner.style.top in JS), so nothing ever scrolls under it: the
+   header needs no background of its own. Transparent, it shows exactly what
+   the reader's own wash shows around it -- no band, on any device, and no
+   backdrop-filter (which misrendered above fixed layers on iOS). Any paper
+   or blur here stacks on the reader's own 93% and reads as a light stripe. */
 :root:has(.about.open) .topbar{
-  /* the reader underneath is already ~93% paper; a second 93% layer on top
-     made the header ~99% — a visibly lighter band. Fewer percent here so the
-     two layers add up to roughly what the reader alone shows. Touch screens
-     get a higher value because they get no blur to soften text scrolling
-     underneath (see below). */
-  background:color-mix(in srgb, var(--paper) 75%, transparent);
-}
-@media (hover:hover){
-  :root:has(.about.open) .topbar{
-    background:color-mix(in srgb, var(--paper) 45%, transparent);
-    backdrop-filter:blur(var(--bg-blur)) saturate(.85);
-    -webkit-backdrop-filter:blur(var(--bg-blur)) saturate(.85);
-  }
+  background:transparent;
 }
 .word{
   flex:0 0 auto;
