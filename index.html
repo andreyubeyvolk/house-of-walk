@@ -1098,6 +1098,12 @@ body.theme-switching .tag{ transition:none; }
   width:0; height:0;
   background:var(--paper);
 }
+/* wide tiers: no paper plate. The header strip above the photo shows the real
+   (translucent) topbar like everywhere else; the plate's one job — hiding the
+   topbar's own Dark/Close under this layer's "Close photo" — is done by just
+   hiding that button while the layer is open. */
+.photolay:not(.centered) .photolay-head{background:transparent;}
+:root:has(.photolay.open:not(.centered)) #themeToggle{opacity:0;pointer-events:none;}
 .photolay-close{
   position:absolute;
   /* both offsets are set from JS off the real Dark/Close button's own
