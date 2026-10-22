@@ -125,9 +125,15 @@
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 
-html{
-  scrollbar-width:thin;
-  scrollbar-color:var(--ink) transparent;
+/* Chrome 121+ ignores ::-webkit-scrollbar whenever scrollbar-width/-color is
+   set, and draws its own rounded bar instead. So the standard properties are
+   only given to browsers without ::-webkit-scrollbar (Firefox: black thumb,
+   its own shape); everyone else gets the square thumb + triangle arrows. */
+@supports not selector(::-webkit-scrollbar){
+  html,.essay-reader-inner{
+    scrollbar-width:thin;
+    scrollbar-color:var(--ink) transparent;
+  }
 }
 ::-webkit-scrollbar{width:14px;height:14px;}
 ::-webkit-scrollbar-track{background:transparent;border-radius:0 !important;}
@@ -953,8 +959,7 @@ body.theme-switching .tag{ transition:none; }
      scrollbar (thin, ink-colored) rather than hidden — it renders in this
      element's own padding-right margin, at the screen's edge, clear of the
      real text columns underneath. */
-  scrollbar-width:thin;
-  scrollbar-color:var(--ink) transparent;
+  /* scrollbar-width/-color for Firefox: see the @supports block by the global scrollbar rules */
   /* the closing gap under the last paragraph is the same var(--pad) the
      text already has from the left and right edges, so the essay ends
      inside an even frame instead of running flush into the bottom of the
@@ -4058,6 +4063,7 @@ body.theme-switching .tag{ transition:none; }
          of its analytics -- one reader now, so one place that reports it */
       if(max - y < 4) essayReadToEnd = true;
     }, {passive:true});
+    softWheel(essayReaderInner, essayReaderInner, function(){ return true; });
   })();
 
   /* ---------- soft lerp scroller ---------- */
@@ -4087,6 +4093,58 @@ body.theme-switching .tag{ transition:none; }
     };
   }
 
+  /* ---------- soft wheel scroll ----------
+     Mouse wheel / trackpad glide toward a target instead of jumping, the same
+     feel as the portfolio's Lenis (lerp ~0.1). Desktop pointers only: touch
+     keeps its native momentum, and anyone who asked the OS for less motion
+     gets plain native scrolling. Keyboard, scrollbar drags and programmatic
+     scrolls stay native; the glide just yields to them. */
+  var softPointer = window.matchMedia('(hover:hover) and (pointer:fine) and (min-width:981px)');
+  var softReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function softWheel(box, scroller, enabled){
+    var win = scroller === window, goal = null, raf = 0, last = 0;
+    function get(){ return win ? window.scrollY : scroller.scrollTop; }
+    function set(v){ if(win) window.scrollTo(0, v); else scroller.scrollTop = v; }
+    function max(){ return win ? document.documentElement.scrollHeight - window.innerHeight : scroller.scrollHeight - scroller.clientHeight; }
+    function ok(){ return softPointer.matches && !softReduced.matches && enabled(); }
+    function stop(){ if(raf) cancelAnimationFrame(raf); raf = 0; goal = null; }
+    function tick(now){
+      raf = 0;
+      if(goal === null) return;
+      if(!ok()){ goal = null; return; }
+      var dt = Math.min(64, now - (last || now - 16.7)); last = now;
+      var cur = get(), diff = goal - cur, step = 1/(window.devicePixelRatio || 1);
+      if(Math.abs(diff) < step){ set(goal); goal = null; last = 0; return; }
+      var move = diff * (1 - Math.pow(1 - 0.114, dt/16.7));
+      if(Math.abs(move) < step) move = (diff > 0 ? 1 : -1) * Math.min(step, Math.abs(diff));
+      set(cur + move);
+      raf = requestAnimationFrame(tick);
+    }
+    box.addEventListener('wheel', function(e){
+      if(e.ctrlKey || e.defaultPrevented || !ok()) return;
+      if(Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      /* a nested scroller under the cursor (not this one) keeps its own wheel */
+      for(var n = e.target; n && n.nodeType === 1 && n !== document.body && n !== document.documentElement; n = n.parentElement){
+        if(n === scroller) break;
+        var oy = getComputedStyle(n).overflowY;
+        if((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return;
+      }
+      var dy = e.deltaMode === 1 ? e.deltaY*16 : e.deltaMode === 2 ? e.deltaY*window.innerHeight : e.deltaY;
+      if(goal === null){
+        /* cancel any native smooth-scroll still in flight (To top) */
+        if(win) window.scrollTo(0, window.scrollY);
+        goal = get(); last = 0;
+      }
+      goal = Math.min(max(), Math.max(0, goal + dy));
+      e.preventDefault();
+      if(!raf) raf = requestAnimationFrame(tick);
+    }, {passive:false});
+    return {stop: stop};
+  }
+  var pageWheel = softWheel(window, window, function(){
+    return !viewer.classList.contains('open') && !document.getElementById('essayReader').classList.contains('open');
+  });
+
   var vLerp = makeLerp(
     function(){ return window.scrollY; },
     function(v){ window.scrollTo(0, v); },
@@ -4095,6 +4153,7 @@ body.theme-switching .tag{ transition:none; }
   document.getElementById('toTopBtn').addEventListener('click', function(){
     playWhoosh('open', {rough:true, vol:0.0112});
     gcEvent('totop/click', 'To top clicked');
+    pageWheel.stop();
     /* native smooth scroll is compositor-threaded and unaffected by main-thread
        load (image decode, layout) — much more reliable on iOS than the rAF
        lerp, which stalls when the main thread is busy loading images */
@@ -4143,6 +4202,7 @@ body.theme-switching .tag{ transition:none; }
     var scrollKeys = ['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '];
     if(scrollKeys.indexOf(e.key) !== -1 && !viewer.classList.contains('open')){
       vLerp.stop();
+      pageWheel.stop();
     }
   });
 
@@ -4490,6 +4550,7 @@ body.theme-switching .tag{ transition:none; }
         if(ph) ph.style.height = '';
       });
       updateThumb();
+      vclose.style.right = '';
       return;
     }
     var vh = window.innerHeight;
@@ -4502,11 +4563,19 @@ body.theme-switching .tag{ transition:none; }
       var h = (isLand && !expanded) ? H * 0.7 : H;
       var ar = parseFloat(el.dataset.ar);
       var w = Math.round(h * ar);
+      /* tablet: a tall photo sized by height can come out wider than the
+         screen, hiding the end of its tag plate; keep it inside the same
+         side margin the first photo rests at */
+      if(tabletViewerQuery.matches){
+        var maxW = document.documentElement.clientWidth - 2*getDeskPad();
+        if(w > maxW){ w = Math.round(maxW); h = w / ar; }
+      }
       wrap.style.height = Math.round(H)+'px';
       ph.style.height = Math.round(h)+'px';
       el.style.width = w+'px';
     });
     updateThumb();
+    alignClose();
   }
 
   /* cached is the same {bounds, trackW, viewW} shape either the active drag
@@ -4637,6 +4706,25 @@ body.theme-switching .tag{ transition:none; }
     }
   }
 
+  /* tablet tier only: Close is position:fixed at the screen edge, but the
+     photo (and its tag plate) is a floating, height-driven frame that can be
+     a little narrower than the screen -- then Close's text hung past the
+     plate's right edge. Pull Close in to the right edge of the frame
+     currently centred on screen (0 when the frame reaches or passes the
+     edge). Only does work while the strip is scrolling or re-laid-out. */
+  function alignClose(){
+    if(!tabletViewerQuery.matches){ if(vclose.style.right) vclose.style.right = ''; return; }
+    var vw = document.documentElement.clientWidth, mid = vw/2, best = null, bd = 1e9;
+    for(var i = 0; i < frameEls.length; i++){
+      var r = frameEls[i].getBoundingClientRect();
+      if(r.right < 0 || r.left > vw) continue;
+      var d = Math.abs((r.left + r.right)/2 - mid);
+      if(d < bd){ bd = d; best = r; }
+    }
+    var inset = best ? Math.max(0, Math.round(vw - best.right)) : 0;
+    vclose.style.right = inset ? inset+'px' : '';
+  }
+
   var scrollTicking = false;
   var gridSyncDebounce = null;
   function onScroll(){
@@ -4645,6 +4733,7 @@ body.theme-switching .tag{ transition:none; }
     requestAnimationFrame(function(){
       scrollTicking = false;
       updateThumb();
+      alignClose();
     });
     /* debounced to once the swipe settles rather than on every scroll
        frame — prefetchAroundCurrent does a linear scan over every frame in
@@ -4737,6 +4826,7 @@ body.theme-switching .tag{ transition:none; }
       filmrow.scrollLeft = Math.round(next * dpr) / dpr;
     }
     hLerp.sync();
+    alignClose();
     filmTickGate.reset(); /* forget wherever the LAST viewer session left this
       — otherwise the first scroll on a newly opened photo gets measured
       against a filmstrip position from a previous photo, possibly an entire
