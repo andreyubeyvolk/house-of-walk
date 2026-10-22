@@ -415,6 +415,12 @@ a{color:inherit;}
    or blur here stacks on the reader's own 93% and reads as a light stripe. */
 :root:has(.about.open) .topbar{
   background:transparent;
+  /* wait for the reader's shutter (0.6s) to have covered the header before
+     going see-through: transparent straight away let the grid cards scrolled
+     behind it show through the header, with their labels running over the
+     tagline. Closing has no delay (this rule stops matching), so the header
+     is solid again before the shutter lifts. */
+  transition:background-color .25s ease .62s;
 }
 .word{
   flex:0 0 auto;
@@ -3258,7 +3264,11 @@ body.theme-switching .tag{ transition:none; }
     el.style.left = '0px';
     var targetLeft = cells[colIndex].getBoundingClientRect().left;
     var currentLeft = el.getBoundingClientRect().left;
-    el.style.left = Math.round(targetLeft - currentLeft)+'px';
+    /* not rounded to a whole px: the offset is recomputed whenever the header's
+       own widths change (Dark -> Close, planet icon), and a rounded value
+       landed a fraction of a pixel differently each time, so the tagline
+       visibly crept sideways when the essay opened */
+    el.style.left = (targetLeft - currentLeft).toFixed(2)+'px';
   }
   function alignTagline(){
     alignToColumn(document.querySelector('.tagline'), 1);
