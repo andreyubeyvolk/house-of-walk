@@ -171,7 +171,7 @@ html,body{margin:0;padding:0;}
 .page-thumb{
   position:fixed;right:0;top:0;width:8px;height:0;
   background:var(--ink);
-  z-index:9;pointer-events:none;
+  z-index:11;pointer-events:none;
   display:none;
 }
 @media (hover:none) and (pointer:coarse){ .page-thumb.on{display:block;} }
@@ -975,6 +975,17 @@ body.theme-switching .tag{ transition:none; }
    the fallback for the one frame before JS runs. */
 .essay-reader{ z-index:6; } /* over the grid, under the sticky topbar (10) and the photo layer (50) */
 .essay-reader-inner{
+  /* hides whatever scrolls up under the header zone (--er-head, set from JS)
+     without hiding the scrollbar: the second layer keeps the scrollbar's own
+     strip (--er-sbw) fully visible, so the bar runs the full screen height */
+  -webkit-mask-image:linear-gradient(#0000 var(--er-head,0px),#000 var(--er-head,0px)),linear-gradient(#000,#000);
+  mask-image:linear-gradient(#0000 var(--er-head,0px),#000 var(--er-head,0px)),linear-gradient(#000,#000);
+  -webkit-mask-size:100% 100%,var(--er-sbw,0px) 100%;
+  mask-size:100% 100%,var(--er-sbw,0px) 100%;
+  -webkit-mask-position:0 0,100% 0;
+  mask-position:0 0,100% 0;
+  -webkit-mask-repeat:no-repeat;
+  mask-repeat:no-repeat;
   position:absolute;
   /* top is set from JS (syncEssayReaderTop) to the header's own real bottom
      edge, not 0 -- so this box, and the native scrollbar riding its own
@@ -3651,6 +3662,7 @@ body.theme-switching .tag{ transition:none; }
       requestAnimationFrame(function(){
         var scrollbarW = essayReaderInner.offsetWidth - essayReaderInner.clientWidth;
         essayReaderInner.style.paddingRight = 'calc(var(--pad) - '+scrollbarW+'px)';
+        essayReaderInner.style.setProperty('--er-sbw', scrollbarW + 'px');
       });
       essayReaderInner.setAttribute('data-cols', n);
     }
@@ -3683,9 +3695,15 @@ body.theme-switching .tag{ transition:none; }
          90-160ms in profiling (see Optimize DOM size / Forced reflow). */
       var headerBottom = topbarEl.getBoundingClientRect().bottom;
       var structuralGap = parseFloat(getComputedStyle(topbarEl).marginBottom) || 0;
-      essayReaderInner.style.top = headerBottom + 'px';
+      /* the scroll box now runs from the very top of the screen so its
+         scrollbar does too, exactly like the main page's: the header's own
+         height is added to the top padding instead (the text starts where it
+         always did), and the same height is masked out of the box so text
+         scrolling up never shows through the transparent header. */
       var minGap = mobileQuery.matches ? 40 : 0;
-      essayReaderInner.style.paddingTop = Math.max(minGap, structuralGap) + 'px';
+      essayReaderInner.style.top = '0px';
+      essayReaderInner.style.paddingTop = (headerBottom + Math.max(minGap, structuralGap)) + 'px';
+      essayReaderInner.style.setProperty('--er-head', headerBottom + 'px');
     }
 
     function refreshEssayReader(){
@@ -3768,6 +3786,10 @@ body.theme-switching .tag{ transition:none; }
       applyEssayReaderCols();
       essayReaderInner.scrollTop = 0;
       essayReader.setAttribute('aria-hidden','false');
+      /* same as the photo viewer: drop the page scrollbar's reserved gutter
+         (its width goes back as html padding, so nothing reflows) so the
+         reader's own scrollbar can sit flush against the screen edge */
+      lockGutter();
       document.body.style.overflow = 'hidden';
       gcEvent('essay-reader/open/'+code, 'Essay reader opened: '+code);
       essayReader.classList.add('open');
@@ -3826,7 +3848,12 @@ body.theme-switching .tag{ transition:none; }
       if(silent !== true){
         playWhoosh('close');
         setTimeout(function(){
+          /* a reader reopened (or a viewer opened) inside this 620ms owns the
+             scroll lock again -- releasing it here would bring the page
+             scrollbar back under it */
+          if(essayReader.classList.contains('open') || viewer.classList.contains('open')) return;
           document.body.style.overflow = '';
+          unlockGutter();
         }, 620);
       }
 
@@ -4299,7 +4326,7 @@ body.theme-switching .tag{ transition:none; }
   /* ---------- page scroll thumb (touch devices) ----------
      The page's native scrollbar can't be styled on Android Chrome, so on touch
      devices it is hidden (CSS) and this 8px thumb stands in, matching the
-     essay reader's own scrollbar. It sits below the header, like that one. */
+     essay reader's own scrollbar, running the full screen height like it. */
   var pageThumb = document.createElement('div');
   pageThumb.className = 'page-thumb';
   pageThumb.setAttribute('aria-hidden','true');
@@ -4312,9 +4339,7 @@ body.theme-switching .tag{ transition:none; }
       pageThumb.classList.remove('on');
       return;
     }
-    var topbarEl = document.querySelector('.topbar');
-    var top = topbarEl ? Math.round(topbarEl.getBoundingClientRect().bottom) : 0;
-    top = Math.max(0, top);
+    var top = 0;
     var vh = window.innerHeight, total = document.documentElement.scrollHeight;
     var track = vh - top;
     if(total <= vh + 1 || track < 40){ pageThumb.classList.remove('on'); return; }
@@ -4970,7 +4995,7 @@ body.theme-switching .tag{ transition:none; }
          no scrollTop write, which would only fight what's already correct. */
       playWhoosh('close');
       setTimeout(function(){
-        if(!viewer.classList.contains('open')) unlockGutter();
+        if(!viewer.classList.contains('open') && !document.getElementById('essayReader').classList.contains('open')) unlockGutter();
       }, VIEWER_SHUTTER_MS);
       return;
     }
