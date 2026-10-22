@@ -135,19 +135,23 @@ html,body{margin:0;padding:0;}
     scrollbar-color:var(--ink) transparent;
   }
 }
-::-webkit-scrollbar{width:14px;height:14px;}
+::-webkit-scrollbar{width:8px;height:8px;}
 ::-webkit-scrollbar-track{background:transparent;border-radius:0 !important;}
 ::-webkit-scrollbar-thumb{background:var(--ink);border-radius:0 !important;}
-::-webkit-scrollbar-button{background-color:transparent;display:block;height:14px;width:14px;border-radius:0 !important;}
+/* arrows are drawn as two half-triangle gradients inside a plain 8x12 box,
+   not with the border trick: borders add to the box and got clipped by it */
+::-webkit-scrollbar-button{display:block;background-color:transparent;border-radius:0 !important;}
+::-webkit-scrollbar-button:vertical{width:8px;height:12px;background-repeat:no-repeat;}
+::-webkit-scrollbar-button:horizontal{width:12px;height:8px;}
 ::-webkit-scrollbar-button:vertical:start:decrement{
-  border-style:solid;
-  border-width:0 5px 6px 5px;
-  border-color:transparent transparent var(--ink) transparent;
+  background-image:linear-gradient(to top left,var(--ink) 50%,transparent 50%),linear-gradient(to top right,var(--ink) 50%,transparent 50%);
+  background-size:3px 4px,3px 4px;
+  background-position:1px center,4px center;
 }
 ::-webkit-scrollbar-button:vertical:end:increment{
-  border-style:solid;
-  border-width:6px 5px 0 5px;
-  border-color:var(--ink) transparent transparent transparent;
+  background-image:linear-gradient(to bottom left,var(--ink) 50%,transparent 50%),linear-gradient(to bottom right,var(--ink) 50%,transparent 50%);
+  background-size:3px 4px,3px 4px;
+  background-position:1px center,4px center;
 }
 ::-webkit-scrollbar-corner{background:transparent;}
 
