@@ -1140,13 +1140,11 @@ body.theme-switching .tag{ transition:none; }
 .photolay:not(.centered) .photolay-head{background:transparent;}
 :root:has(.photolay.open:not(.centered)) #themeToggle{opacity:0;pointer-events:none;}
 /* the reader's Close and this layer's Close sit in the same spot and swap
-   places; cross-fading them (same .15s both ways) means neither is ever seen
-   stacked on the other while the shutter is still moving */
-#themeToggle{transition:background-color .15s, color .15s, opacity .15s;}
+   places INSTANTLY, no fade: two different words ("Close" / "Close photo",
+   both right-aligned) overlap into mush for as long as a cross-fade lasts */
 .photolay-close{
-  opacity:0;
+  visibility:hidden;
   pointer-events:none;
-  transition:background-color .15s, color .15s, opacity .15s;
   position:absolute;
   /* both offsets are set from JS off the real Dark/Close button's own
      measured box, so this lands exactly on it at every tier instead of
@@ -1157,7 +1155,7 @@ body.theme-switching .tag{ transition:none; }
   text-align:right;
   line-height:1.3;
 }
-.photolay.open .photolay-close{opacity:1;pointer-events:auto;}
+.photolay.open .photolay-close{visibility:visible;pointer-events:auto;}
 .photolay-stage{
   position:absolute;
   left:0; top:0;
