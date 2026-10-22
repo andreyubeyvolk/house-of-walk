@@ -143,6 +143,11 @@ html,body{margin:0;padding:0;}
 ::-webkit-scrollbar-button{display:block;background-color:transparent;border-radius:0 !important;}
 ::-webkit-scrollbar-button:vertical{width:8px;height:12px;background-repeat:no-repeat;}
 ::-webkit-scrollbar-button:horizontal{width:12px;height:8px;}
+/* Chrome gives every bar four button slots; the two that carry no arrow
+   (the "inner" ones) still took 12px each, leaving a dead strip between the
+   arrow and the thumb at both ends, so the thumb never reached the ends */
+::-webkit-scrollbar-button:start:increment,
+::-webkit-scrollbar-button:end:decrement{display:none;}
 ::-webkit-scrollbar-button:vertical:start:decrement{
   background-image:linear-gradient(to top left,var(--ink) 50%,transparent 50%),linear-gradient(to top right,var(--ink) 50%,transparent 50%);
   background-size:3px 4px,3px 4px;
