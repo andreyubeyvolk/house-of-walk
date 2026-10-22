@@ -160,6 +160,22 @@ html,body{margin:0;padding:0;}
 }
 ::-webkit-scrollbar-corner{background:transparent;}
 
+/* touch devices: no arrow buttons (nothing to click them with), and the page's
+   own bar is the .page-thumb below, so every scroller reads the same: a slim
+   black 8px thumb. Android Chrome ignores ::-webkit-scrollbar on the page
+   itself and draws its thin grey overlay, which is why that one is replaced. */
+@media (hover:none) and (pointer:coarse){
+  ::-webkit-scrollbar-button{display:none !important;}
+  html{scrollbar-width:none;}
+}
+.page-thumb{
+  position:fixed;right:0;top:0;width:8px;height:0;
+  background:var(--ink);
+  z-index:9;pointer-events:none;
+  display:none;
+}
+@media (hover:none) and (pointer:coarse){ .page-thumb.on{display:block;} }
+
 html{
   overscroll-behavior-y:none;
   overflow-anchor:none;
@@ -4269,6 +4285,46 @@ body.theme-switching .tag{ transition:none; }
     playTick();
     buzz();
   }, {passive:true});
+
+  /* ---------- page scroll thumb (touch devices) ----------
+     The page's native scrollbar can't be styled on Android Chrome, so on touch
+     devices it is hidden (CSS) and this 8px thumb stands in, matching the
+     essay reader's own scrollbar. It sits below the header, like that one. */
+  var pageThumb = document.createElement('div');
+  pageThumb.className = 'page-thumb';
+  pageThumb.setAttribute('aria-hidden','true');
+  document.body.appendChild(pageThumb);
+  var thumbRaf = 0;
+  function updatePageThumb(){
+    thumbRaf = 0;
+    var essayEl = document.getElementById('essayReader');
+    if(viewer.classList.contains('open') || (essayEl && essayEl.classList.contains('open'))){
+      pageThumb.classList.remove('on');
+      return;
+    }
+    var topbarEl = document.querySelector('.topbar');
+    var top = topbarEl ? Math.round(topbarEl.getBoundingClientRect().bottom) : 0;
+    top = Math.max(0, top);
+    var vh = window.innerHeight, total = document.documentElement.scrollHeight;
+    var track = vh - top;
+    if(total <= vh + 1 || track < 40){ pageThumb.classList.remove('on'); return; }
+    var size = Math.max(36, Math.round(track * vh / total));
+    var maxY = total - vh;
+    var y = Math.min(maxY, Math.max(0, window.scrollY));
+    pageThumb.style.top = (top + Math.round((track - size) * (y / maxY))) + 'px';
+    pageThumb.style.height = size + 'px';
+    pageThumb.classList.add('on');
+  }
+  function schedulePageThumb(){ if(!thumbRaf) thumbRaf = requestAnimationFrame(updatePageThumb); }
+  window.addEventListener('scroll', schedulePageThumb, {passive:true});
+  window.addEventListener('resize', schedulePageThumb);
+  if(window.ResizeObserver) new ResizeObserver(schedulePageThumb).observe(document.body);
+  if(window.MutationObserver){
+    var thumbMO = new MutationObserver(schedulePageThumb);
+    thumbMO.observe(viewer, {attributes:true, attributeFilter:['class']});
+    thumbMO.observe(document.getElementById('essayReader'), {attributes:true, attributeFilter:['class']});
+  }
+  schedulePageThumb();
 
   var filmrow = document.getElementById('filmrow');
   var vclose = document.getElementById('vclose');
