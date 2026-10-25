@@ -795,6 +795,29 @@ body.theme-switching .tag{ transition:none; }
 }
 .filmrow.dragging *{cursor:grabbing !important;}
 
+/* ---------- photo loupe (long-press magnifier) ---------- */
+#photoLoupe{
+  position:fixed;
+  width:180px;height:180px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.65);
+  box-shadow:0 4px 28px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.2);
+  overflow:hidden;
+  pointer-events:none;
+  z-index:120;
+  opacity:0;
+  transition:opacity .15s ease;
+  display:none;
+}
+#photoLoupe.visible{opacity:1;}
+#photoLoupe img{
+  position:absolute;
+  object-fit:cover;
+  user-select:none;
+  pointer-events:none;
+  -webkit-user-drag:none;
+}
+
 .frame{
   flex:0 0 auto;
   display:flex;
@@ -4380,6 +4403,12 @@ body.theme-switching .tag{ transition:none; }
      should. */
   var filmTickGate = makeTickGate(64);
 
+  /* photo pinch-zoom + loupe state */
+  var zoomImg = null, zoomScale = 1, zoomTx = 0, zoomTy = 0;
+  var zoomPhRect = null;   /* getBoundingClientRect of the .ph being zoomed */
+  var pinchActive = false;
+  var panActive = false;
+
   /* desktop only: the filmrow has generous padding (50vw each side, see
      CSS) so the first/last photo CAN be scrolled to dead center same as any
      other — but nothing stopped you from continuing to scroll past that
@@ -4577,6 +4606,270 @@ body.theme-switching .tag{ transition:none; }
     hsBtnLeft.addEventListener('click', function(){ nudge(-1); });
     hsBtnRight.addEventListener('click', function(){ nudge(1); });
   }
+
+  /* ---- pinch-to-zoom + long-press loupe helpers ---- */
+
+  function applyZoom(){
+    if(!zoomImg) return;
+    zoomImg.style.transform = (zoomScale === 1 && zoomTx === 0 && zoomTy === 0)
+      ? ''
+      : 'scale('+zoomScale+') translate('+zoomTx+'px,'+zoomTy+'px)';
+  }
+
+  function resetZoom(animated){
+    if(!zoomImg) return;
+    var img = zoomImg;
+    if(animated){
+      img.style.transition = 'transform .25s ease';
+      img.style.transform = '';
+      setTimeout(function(){ img.style.transition = ''; img.style.willChange = ''; }, 270);
+    } else {
+      img.style.transition = '';
+      img.style.transform = '';
+      img.style.willChange = '';
+    }
+    zoomImg = null; zoomScale = 1; zoomTx = 0; zoomTy = 0; zoomPhRect = null;
+  }
+
+  function clampZoomTranslate(scale, tx, ty, rect){
+    var maxTx = rect.width  / 2 * (scale - 1) / scale;
+    var maxTy = rect.height / 2 * (scale - 1) / scale;
+    return {
+      tx: Math.max(-maxTx, Math.min(maxTx, tx)),
+      ty: Math.max(-maxTy, Math.min(maxTy, ty))
+    };
+  }
+
+  /* loupe element (created lazily) */
+  var loupeEl = null, loupeImg = null;
+  function getLoupe(){
+    if(!loupeEl){
+      loupeEl = document.createElement('div');
+      loupeEl.id = 'photoLoupe';
+      loupeImg = document.createElement('img');
+      loupeImg.alt = '';
+      loupeEl.appendChild(loupeImg);
+      document.body.appendChild(loupeEl);
+    }
+    return {el: loupeEl, img: loupeImg};
+  }
+
+  var loupeActive = false;
+  var loupeTimer = null;
+  var loupeTouchId = -1;
+  var loupeTouchX = 0, loupeTouchY = 0;
+  var loupePhEl = null;
+
+  function showLoupe(tx, ty){
+    var closest = findClosestFrame();
+    if(!closest) return;
+    loupePhEl = closest.querySelector('.ph');
+    if(!loupePhEl) return;
+    var full = loupePhEl.querySelector('.ph-full');
+    var thumb = loupePhEl.querySelector('.ph-thumb');
+    var src = (full && full.complete && full.naturalWidth) ? full.src : (thumb ? thumb.src : '');
+    if(!src) return;
+    var l = getLoupe();
+    l.img.src = src;
+    loupeActive = true;
+    l.el.style.display = 'block';
+    updateLoupe(tx, ty);
+    requestAnimationFrame(function(){ if(loupeEl) loupeEl.classList.add('visible'); });
+  }
+
+  function updateLoupe(tx, ty){
+    if(!loupePhEl || !loupeActive || !loupeEl) return;
+    var rect = loupePhEl.getBoundingClientRect();
+    var MAG = 2.5, R = 90;
+    var iw = rect.width * MAG, ih = rect.height * MAG;
+    loupeImg.style.width  = iw + 'px';
+    loupeImg.style.height = ih + 'px';
+    loupeImg.style.left = (R - (tx - rect.left) * MAG) + 'px';
+    loupeImg.style.top  = (R - (ty - rect.top)  * MAG) + 'px';
+    /* position loupe above the finger, clamped to viewport */
+    var lx = Math.max(8, Math.min(window.innerWidth  - 188, tx - R));
+    var ly = Math.max(8, Math.min(window.innerHeight - 188, ty - 210));
+    loupeEl.style.left = lx + 'px';
+    loupeEl.style.top  = ly + 'px';
+  }
+
+  function hideLoupe(){
+    if(!loupeActive || !loupeEl) return;
+    loupeEl.classList.remove('visible');
+    loupeActive = false; loupePhEl = null;
+    var el = loupeEl;
+    setTimeout(function(){ if(el) el.style.display = 'none'; }, 170);
+  }
+
+  /* ---- attach touch handlers once (filmrow exists from page load) ---- */
+  (function(){
+    var pinchStartDist = 0;
+    var pinchStartMidX = 0, pinchStartMidY = 0;
+    var pinchBaseScale = 1, pinchBaseTx = 0, pinchBaseTy = 0;
+    var pinchPhRect = null;   /* local alias while gesture is in flight */
+
+    var panTouchId = -1, panStartX = 0, panStartY = 0;
+    var panBaseTx = 0, panBaseTy = 0;
+
+    function dist2(a, b){
+      var dx = b.clientX - a.clientX, dy = b.clientY - a.clientY;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    /* iOS-specific: fires before touchstart for pinch; belt + suspenders */
+    filmrow.addEventListener('gesturestart',  function(e){ e.preventDefault(); }, {passive:false});
+    filmrow.addEventListener('gesturechange', function(e){ e.preventDefault(); }, {passive:false});
+
+    filmrow.addEventListener('touchstart', function(e){
+      if(!viewer.classList.contains('open')) return;
+
+      if(e.touches.length === 2){
+        e.preventDefault();
+        clearTimeout(loupeTimer); loupeTimer = null;
+        hideLoupe();
+        panActive = false;
+
+        var closest = findClosestFrame();
+        if(!closest) return;
+        var phEl = closest.querySelector('.ph');
+        if(!phEl) return;
+        var img = phEl.querySelector('.ph-full') || phEl.querySelector('.ph-thumb');
+        if(!img) return;
+
+        pinchPhRect = phEl.getBoundingClientRect();
+        var t = e.touches;
+        pinchStartDist  = dist2(t[0], t[1]);
+        pinchStartMidX  = (t[0].clientX + t[1].clientX) / 2;
+        pinchStartMidY  = (t[0].clientY + t[1].clientY) / 2;
+
+        if(zoomImg === img){
+          pinchBaseScale = zoomScale; pinchBaseTx = zoomTx; pinchBaseTy = zoomTy;
+        } else {
+          if(zoomImg && zoomImg !== img) resetZoom(false);
+          zoomImg = img; zoomScale = 1; zoomTx = 0; zoomTy = 0;
+          pinchBaseScale = 1; pinchBaseTx = 0; pinchBaseTy = 0;
+        }
+        img.style.transition  = 'none';
+        img.style.willChange  = 'transform';
+        zoomPhRect = pinchPhRect;
+        pinchActive = true;
+
+      } else if(e.touches.length === 1){
+        /* pan while zoomed */
+        if(zoomImg && zoomScale > 1.05 && !pinchActive){
+          e.preventDefault();
+          var pt = e.touches[0];
+          panActive   = true;
+          panTouchId  = pt.identifier;
+          panStartX   = pt.clientX;
+          panStartY   = pt.clientY;
+          panBaseTx   = zoomTx;
+          panBaseTy   = zoomTy;
+          return;
+        }
+
+        /* long-press for loupe */
+        if(!loupeActive && !panActive){
+          var touch = e.touches[0];
+          var tgt = touch.target;
+          var onPh = tgt.closest ? tgt.closest('.ph') : null;
+          if(!onPh) return;
+          loupeTouchId = touch.identifier;
+          loupeTouchX  = touch.clientX;
+          loupeTouchY  = touch.clientY;
+          loupeTimer   = setTimeout(function(){
+            loupeTimer = null;
+            showLoupe(loupeTouchX, loupeTouchY);
+          }, 500);
+        }
+      }
+    }, {passive:false});
+
+    filmrow.addEventListener('touchmove', function(e){
+      if(!viewer.classList.contains('open')) return;
+
+      if(pinchActive && e.touches.length >= 2){
+        e.preventDefault();
+        var t = e.touches;
+        var newDist  = dist2(t[0], t[1]);
+        var newMidX  = (t[0].clientX + t[1].clientX) / 2;
+        var newMidY  = (t[0].clientY + t[1].clientY) / 2;
+        var r = pinchStartDist > 0 ? newDist / pinchStartDist : 1;
+        var newScale = Math.max(1, Math.min(6, pinchBaseScale * r));
+
+        /* keep pinch midpoint fixed in photo space */
+        var phCx = pinchPhRect.left + pinchPhRect.width  / 2;
+        var phCy = pinchPhRect.top  + pinchPhRect.height / 2;
+        var pxNat = (pinchStartMidX - phCx) / pinchBaseScale - pinchBaseTx;
+        var pyNat = (pinchStartMidY - phCy) / pinchBaseScale - pinchBaseTy;
+        var rawTx  = (newMidX - phCx) / newScale - pxNat;
+        var rawTy  = (newMidY - phCy) / newScale - pyNat;
+        var c = clampZoomTranslate(newScale, rawTx, rawTy, pinchPhRect);
+        zoomScale = newScale; zoomTx = c.tx; zoomTy = c.ty;
+        applyZoom();
+
+      } else if(panActive && e.touches.length >= 1){
+        e.preventDefault();
+        for(var i = 0; i < e.changedTouches.length; i++){
+          var ct = e.changedTouches[i];
+          if(ct.identifier !== panTouchId) continue;
+          if(!zoomPhRect) break;
+          var dx = ct.clientX - panStartX;
+          var dy = ct.clientY - panStartY;
+          var rawPTx = panBaseTx + dx / zoomScale;
+          var rawPTy = panBaseTy + dy / zoomScale;
+          var cp = clampZoomTranslate(zoomScale, rawPTx, rawPTy, zoomPhRect);
+          zoomTx = cp.tx; zoomTy = cp.ty;
+          applyZoom();
+          break;
+        }
+
+      } else if(loupeActive){
+        e.preventDefault();
+        for(var j = 0; j < e.changedTouches.length; j++){
+          var lct = e.changedTouches[j];
+          if(lct.identifier !== loupeTouchId) continue;
+          loupeTouchX = lct.clientX; loupeTouchY = lct.clientY;
+          updateLoupe(lct.clientX, lct.clientY);
+          break;
+        }
+
+      } else if(loupeTimer){
+        /* cancel long-press if finger moves > 8px */
+        for(var k = 0; k < e.changedTouches.length; k++){
+          var mv = e.changedTouches[k];
+          if(mv.identifier !== loupeTouchId) continue;
+          var ddx = mv.clientX - loupeTouchX, ddy = mv.clientY - loupeTouchY;
+          if(Math.sqrt(ddx*ddx + ddy*ddy) > 8){
+            clearTimeout(loupeTimer); loupeTimer = null;
+          }
+          break;
+        }
+      }
+    }, {passive:false});
+
+    function onTouchEnd(e){
+      if(pinchActive && e.touches.length < 2){
+        pinchActive = false;
+        if(zoomImg && zoomScale < 1.15){
+          resetZoom(true);
+        } else if(zoomImg){
+          zoomImg.style.transition = '';
+          zoomImg.style.willChange = '';
+        }
+      }
+      if(panActive && e.touches.length === 0) panActive = false;
+      if(loupeActive) hideLoupe();
+      if(loupeTimer){ clearTimeout(loupeTimer); loupeTimer = null; }
+    }
+    filmrow.addEventListener('touchend',    onTouchEnd, {passive:true});
+    filmrow.addEventListener('touchcancel', function(){
+      pinchActive = false; panActive = false;
+      if(zoomImg && zoomScale < 1.15) resetZoom(false);
+      hideLoupe();
+      if(loupeTimer){ clearTimeout(loupeTimer); loupeTimer = null; }
+    }, {passive:true});
+  })();
 
   function layoutFrames(){
     /* every frame's width/position and the track's own width are about to
@@ -4848,7 +5141,14 @@ body.theme-switching .tag{ transition:none; }
        syncGridScrollToOpenFrame's own comment) — this only ever warms the
        next photo's file. */
     clearTimeout(gridSyncDebounce);
-    gridSyncDebounce = setTimeout(prefetchAroundCurrent, 100);
+    gridSyncDebounce = setTimeout(function(){
+      prefetchAroundCurrent();
+      /* reset zoom on any photo that's no longer centred */
+      if(zoomImg){
+        var clos = findClosestFrame();
+        if(clos && !clos.contains(zoomImg)) resetZoom(false);
+      }
+    }, 100);
   }
 
   /* set only by window.openViewerFromEssay (essay-reader IIFE, below) --
@@ -4966,6 +5266,10 @@ body.theme-switching .tag{ transition:none; }
   }
 
   function closeViewer(){
+    /* reset any active zoom / loupe so they don't persist after reopen */
+    pinchActive = false; panActive = false;
+    resetZoom(false);
+    hideLoupe();
     /* a photo opened from a Period footnote link doesn't return to the bare
        grid like every other viewer close does -- it hands the reader back
        to the essay they were actually reading, at the exact line they left,
