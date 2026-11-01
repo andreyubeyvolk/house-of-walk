@@ -989,6 +989,28 @@ body.theme-switching .tag{ transition:none; }
    started on the card. */
 .cell.essay-cover.tapped .ph img{transform:rotate(0deg);}
 
+/* ---------- Flight Oracle ----------
+   Reuses .about's own shutter wholesale too, same as the essay reader below
+   — the game itself is a separate document (flight-oracle.html) in an
+   iframe, not markup on this page, so there's nothing to lay out here
+   beyond sizing and positioning that iframe. */
+.fo-trigger{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;padding:2px 0;transition:background-color .15s,color .15s;}
+@media(hover:hover){.fo-trigger:hover{background:var(--ink);color:var(--paper);}}
+.fo-trigger.open{background:var(--ink);color:var(--paper);}
+#foShutter{ z-index:6; } /* over the grid, under the sticky topbar (10) and the photo layer (50) — same tier as the essay reader */
+#foShutter iframe{
+  position:absolute;
+  left:0;right:0;bottom:0;
+  width:100%;
+  border:none;display:block;
+  /* NOT var(--paper) — #foShutter (.about) already paints the real blurred
+     backdrop behind it; a solid fill here would sit on top of that as an
+     opaque block wherever the game itself doesn't fully cover. flight-
+     oracle.html's own fo-embedded detection does the matching half of
+     this: it drops ITS OWN solid background the same way when embedded. */
+  background:transparent;
+}
+
 /* ---------- essay reader (Period page) ----------
    Reuses .about's own shutter-reveal/blur/grain/theme-inversion CSS wholesale
    (shared class, not duplicated rules) — only the inner layout is new. Column
@@ -1558,8 +1580,8 @@ body.theme-switching .tag{ transition:none; }
     <div><a class="byline-link" href="https://andreyubeyvolk.com/" target="_blank" rel="noopener noreferrer">A.UBV.</a></div>
   </div>
   <div class="tagline">
-    <div>A personal archive</div>
-    <div>Ricoh GRIII <span id="photoCount"></span></div>
+    <div>A personal photo archive <span id="photoCount"></span></div>
+    <div>and <button class="fo-trigger" id="foTrigger" type="button">Flight oracle</button></div>
   </div>
   <button class="theme-toggle plate-btn" id="themeToggle" type="button">Dark</button>
 </header>
@@ -1588,6 +1610,10 @@ body.theme-switching .tag{ transition:none; }
     <div class="hs-track" id="hsTrack"><div class="hs-thumb" id="hsThumb"></div></div>
     <button class="hs-btn hs-btn-right" id="hsBtnRight" type="button" aria-label="Scroll right"></button>
   </div>
+</div>
+
+<div class="about" id="foShutter" aria-hidden="true">
+  <iframe id="foFrame" title="Flight Oracle"></iframe>
 </div>
 
 <div class="about essay-reader" id="essayReader" aria-hidden="true">
@@ -3468,6 +3494,90 @@ body.theme-switching .tag{ transition:none; }
     gcEvent('theme/'+next, 'Theme switched to '+next);
   }
   themeToggle.addEventListener('click', onThemeToggleClick);
+
+  /* ---------- Flight Oracle ----------
+     The game itself lives entirely in flight-oracle.html, loaded into an
+     iframe the first time it's opened and kept alive afterwards (closing
+     just hides the shutter, so a game in progress survives a close/reopen).
+     Positioning/theme/topbar-hiding all talk to that document directly
+     (same-origin, so this is plain DOM access, not postMessage) rather than
+     through any shared state — see flight-oracle.html's own fo-embedded
+     detection for its half of this. */
+  var foTrigger = document.getElementById('foTrigger');
+  var foShutter = document.getElementById('foShutter');
+  var foFrame = document.getElementById('foFrame');
+  if(foTrigger && foShutter && foFrame){
+    function syncFoFrameTop(){
+      var headerBottom = document.querySelector('.topbar').getBoundingClientRect().bottom;
+      foFrame.style.top = headerBottom + 'px';
+      /* an <iframe> is a replaced element — top+bottom alone (no explicit
+         height) doesn't stretch it to fill the gap the way it would a plain
+         div; without this it just sits at the browser's intrinsic default
+         iframe size (150px tall) instead of filling the shutter. */
+      foFrame.style.height = (foShutter.getBoundingClientRect().height - headerBottom) + 'px';
+    }
+    function hideFoFrameTopbar(){
+      try{
+        var doc = foFrame.contentDocument;
+        if(!doc || doc.getElementById('fo-embed-style')) return;
+        var style = doc.createElement('style');
+        style.id = 'fo-embed-style';
+        style.textContent = '#topbar{display:none !important;}';
+        doc.head.appendChild(style);
+        foFrame.contentWindow.dispatchEvent(new Event('resize'));
+      }catch(e){}
+    }
+    function syncFoTheme(){
+      try{
+        var win = foFrame.contentWindow;
+        if(!win || typeof win.applyTheme !== 'function') return;
+        win.applyTheme(root.getAttribute('data-theme') === 'dark' ? 'dark' : '');
+      }catch(e){}
+    }
+    foFrame.addEventListener('load', function(){ hideFoFrameTopbar(); syncFoTheme(); });
+    window.addEventListener('resize', function(){ if(foShutter.classList.contains('open')) syncFoFrameTop(); });
+    function openFlightOracle(){
+      /* don't layer this over another shutter that's already open — the
+         essay reader's own open/close lives in a separate closure further
+         down this file, so rather than reach into it, just defer to
+         whichever opened first. In practice the trigger sits in the topbar
+         (z-index 10), which stays clickable over any open overlay (z-index
+         5/6), so this guards a real if unlikely click. */
+      var essayEl = document.getElementById('essayReader');
+      if((essayEl && essayEl.classList.contains('open')) || viewer.classList.contains('open')) return;
+      if(!foFrame.getAttribute('src')) foFrame.src = 'flight-oracle.html';
+      syncFoFrameTop();
+      foShutter.classList.add('open');
+      foShutter.setAttribute('aria-hidden', 'false');
+      foTrigger.classList.add('open');
+      lockGutter();
+      document.body.style.overflow = 'hidden';
+      themeToggle.removeEventListener('click', onThemeToggleClick);
+      themeToggle.textContent = 'Close';
+      themeToggle.addEventListener('click', closeFlightOracle);
+      playWhoosh('open');
+      gcEvent('flight-oracle/open', 'Flight Oracle opened');
+      syncFoTheme();
+    }
+    function closeFlightOracle(){
+      foShutter.classList.remove('open');
+      foShutter.setAttribute('aria-hidden', 'true');
+      foTrigger.classList.remove('open');
+      playWhoosh('close');
+      setTimeout(function(){
+        if(foShutter.classList.contains('open')) return;
+        document.body.style.overflow = '';
+        unlockGutter();
+      }, 620); /* matches .about's own .6s clip-path transition, with a little slack */
+      themeToggle.removeEventListener('click', closeFlightOracle);
+      themeToggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light' : 'Dark';
+      themeToggle.addEventListener('click', onThemeToggleClick);
+      gcEvent('flight-oracle/close', 'Flight Oracle closed');
+    }
+    foTrigger.addEventListener('click', function(){
+      if(foShutter.classList.contains('open')) closeFlightOracle(); else openFlightOracle();
+    });
+  }
 
   /* must run after theme-toggle's text is set: its content width affects the
      flex row's space-between distribution, which the tagline offset depends on */
