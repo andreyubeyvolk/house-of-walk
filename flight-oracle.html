@@ -1682,6 +1682,7 @@ downloadBtn.addEventListener('click', function(){
     // which words land on which line — stays the same regardless of how
     // large the browser window actually is when Download is clicked.
     var lines = getRenderedLines(rpForecast);
+    lines = preventOrphans(lines, ctx, 5, 1016); // 1080 - 2*32px edge margin, same constraint the live wrap is sized to
     // Tight vertical fit: measure the FIRST line's real ascent and the LAST
     // line's real descent instead of guessing a fixed 0.78×fontSize offset
     // — a fixed guess leaves extra air below the last line whenever it
@@ -1888,6 +1889,38 @@ function getRenderedLines(el){
     }
   }
   if(cur.length){ lines.push(cur.join(' ')); }
+  return lines;
+}
+
+/* text-wrap:pretty (what getRenderedLines reads back) avoids the WORST
+   widows, but it's a general-purpose browser heuristic, not a rule tuned to
+   this card — a short, hanging word (a preposition, a connector, anything
+   up to maxLen letters) stranded alone at a line's right edge still gets
+   through it regularly. Pulls that word down onto the next line instead.
+   Deliberately ONE pop per line, not repeated until no line ends short
+   anymore: at maxLen as loose as 5 letters, a huge fraction of ordinary
+   English words qualify ("the", "and", "with", "from", "will"...), so
+   repeating until every line's own ending is 6+ letters tried to "fix" text
+   that didn't need it — on real forecast text this measured out to eating
+   most of a line into the next one in the worst case (an 11-word first
+   line collapsing to 3). One pop catches the actual stranded-word read
+   without that runaway effect; it occasionally leaves a second short word
+   exposed one line later, which is a far smaller miss than the fix being
+   worse than the problem. Only pulls a word down if the next line actually
+   has room for it at ctx's current font (measured, not assumed) — a
+   stranded short word reads better than text spilling past the card's own
+   fixed-width edges. */
+function preventOrphans(lines, ctx, maxLen, maxWidth){
+  for(var j=0;j<lines.length-1;j++){
+    var lineWords = lines[j].split(' ');
+    var last = lineWords[lineWords.length-1];
+    if(lineWords.length <= 1 || last.length > maxLen){ continue; }
+    var candidate = last + ' ' + lines[j+1];
+    if(ctx.measureText(candidate).width > maxWidth){ continue; }
+    lineWords.pop();
+    lines[j] = lineWords.join(' ');
+    lines[j+1] = candidate;
+  }
   return lines;
 }
 
