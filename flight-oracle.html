@@ -184,8 +184,14 @@ html.fo-embedded body{background:transparent;}
   background:var(--fo-ink);color:var(--fo-bg);border:none;cursor:pointer;
   font-family:inherit;font-weight:400;font-size:2.22cqw;
   padding:.3em 1em;
+  transition:background-color .15s,color .15s;
 }
-@media(hover:hover){.fo-about-close:hover{opacity:.8;}}
+/* inverted, not faded — the same rule every solid-black button on the page
+   follows on hover (.fo-btn-top/-bottom, the result-card pills): a button
+   that starts solid black inverts, a button that starts as plain text gets
+   a black plate (.plate-btn, .fo-title, .byline-link). opacity:.8 was the
+   odd one out. */
+@media(hover:hover){.fo-about-close:hover{background:var(--fo-bg);color:var(--fo-ink);}}
 .fo-center-text{
   position:absolute;top:13.54%;left:50%;
   transform:translate(-50%,-50%);

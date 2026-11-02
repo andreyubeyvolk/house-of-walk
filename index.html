@@ -996,7 +996,6 @@ body.theme-switching .tag{ transition:none; }
    beyond sizing and positioning that iframe. */
 .fo-trigger{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;padding:2px 0;transition:background-color .15s,color .15s;}
 @media(hover:hover){.fo-trigger:hover{background:var(--ink);color:var(--paper);}}
-.fo-trigger.open{background:var(--ink);color:var(--paper);}
 #foShutter{ z-index:6; } /* over the grid, under the sticky topbar (10) and the photo layer (50) — same tier as the essay reader */
 #foShutter iframe{
   position:absolute;
@@ -3558,12 +3557,18 @@ body.theme-switching .tag{ transition:none; }
       syncFoFrameTop();
       foShutter.classList.add('open');
       foShutter.setAttribute('aria-hidden', 'false');
-      foTrigger.classList.add('open');
       lockGutter();
       document.body.style.overflow = 'hidden';
       themeToggle.removeEventListener('click', onThemeToggleClick);
       themeToggle.textContent = 'Close';
       themeToggle.addEventListener('click', closeFlightOracle);
+      /* Dark/Light and Close are different lengths, which shifts how much
+         free space justify-content:space-between leaves before the tagline
+         — the same reason openEssay/closeEssay call this. Without it, the
+         tagline's own position (set once, in alignToColumn's own left:Npx)
+         goes stale and visibly slides sideways the moment the button's text
+         changes width. */
+      alignTagline();
       playWhoosh('open');
       gcEvent('flight-oracle/open', 'Flight Oracle opened');
       syncFoTheme();
@@ -3571,7 +3576,6 @@ body.theme-switching .tag{ transition:none; }
     function closeFlightOracle(){
       foShutter.classList.remove('open');
       foShutter.setAttribute('aria-hidden', 'true');
-      foTrigger.classList.remove('open');
       playWhoosh('close');
       setTimeout(function(){
         if(foShutter.classList.contains('open')) return;
@@ -3581,6 +3585,7 @@ body.theme-switching .tag{ transition:none; }
       themeToggle.removeEventListener('click', closeFlightOracle);
       themeToggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light' : 'Dark';
       themeToggle.addEventListener('click', onThemeToggleClick);
+      alignTagline();
       gcEvent('flight-oracle/close', 'Flight Oracle closed');
     }
     foTrigger.addEventListener('click', function(){
