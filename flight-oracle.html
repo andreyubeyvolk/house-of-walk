@@ -314,9 +314,11 @@ html.fo-embedded body{background:transparent;}
 /* forced on for both seats during the brief pause after the second pick
    (see the seat click handler) — a real hover never happens on a tap, so
    without this touch players never saw the planet names at all, only the
-   icons. Unconditional (no hover:hover guard): desktop gets it too, same
-   as it was already getting via hover anyway. */
-.seat.reveal-info .seat-info{opacity:1;}
+   icons. hover:none-gated on purpose: a mouse user already has hover for
+   this (see the rule above) and doesn't need it forced on too. */
+@media(hover:none){
+  .seat.reveal-info .seat-info{opacity:1;}
+}
 
 /* ── WING LINES ── */
 /* sized/positioned exactly as the Figma source vector: a kite-shaped
@@ -1300,7 +1302,25 @@ var PHOTOS = [
 var assignments = []; // {planet, state} × 18
 var picked = [];      // seat indices (0–17), max 2
 var pickedEls = [];   // the two actual seat elements just clicked, same order as picked
+// Kicked off as soon as the collapse animation starts (see startCollapse),
+// not when showResult() needs it — without a head start, setting rpImg.src
+// right as the result panel becomes visible left Chrome showing the
+// PREVIOUS round's already-decoded photo for a beat (changing .src doesn't
+// blank an <img> immediately, it keeps the old bitmap up until the new one
+// finishes loading), which read as the wrong photo flashing in from cache.
+// Starting the fetch here gives it the full ~2-3s of the pause + spinner to
+// finish before showResult ever looks at it.
+var resultPhotoPreload = null;
+var resultPhotoPreloadSrc = null;
 var gamePhase = 'idle'; // idle | picking | loading | result
+// Bumped by every initGame() — the pending pre-collapse setTimeout and the
+// rAF tick loop both capture this at the moment they're scheduled and bail
+// out if it's moved on by the time they'd fire. Without this, resetting the
+// game (e.g. the host page calling initGame() when its shutter closes)
+// while a round is still mid-animation didn't actually stop that round: it
+// kept running in the background and landed on the result panel anyway a
+// moment later, quietly undoing the reset.
+var gameRound = 0;
 
 /* ── SHUFFLE ── */
 function shuffle(arr){
@@ -1347,6 +1367,7 @@ aboutOverlay.addEventListener('click', function(e){ if(e.target === aboutOverlay
 
 /* ── INIT GAME ── */
 function initGame(){
+  gameRound++; // invalidates any pending startCollapse/tick from a round in flight
   assignments = makeAssignments();
   picked = [];
   pickedEls = [];
@@ -1410,7 +1431,9 @@ seats.forEach(function(el){
       // instant cut," not enough time to register what either seat turned
       // out to be. gamePhase is already 'loading' here, so a third click
       // during this pause is a no-op, same as it always was.
-      setTimeout(startCollapse, 1100);
+      (function(round){
+        setTimeout(function(){ if(round === gameRound) startCollapse(); }, 1100);
+      })(gameRound);
     }
   });
 });
@@ -1419,6 +1442,15 @@ seats.forEach(function(el){
 function startCollapse(){
   var p1 = assignments[picked[0]];
   var p2 = assignments[picked[1]];
+  var round = gameRound; // see tick() below
+
+  // Same pi formula showResult() below uses — computed again here (not
+  // passed through) just to start the fetch early; see resultPhotoPreload's
+  // own comment above for why.
+  var pi = (p1.planet + p2.planet * 5 + p1.inv * 3) % PHOTOS.length;
+  resultPhotoPreloadSrc = PHOTOS[pi];
+  resultPhotoPreload = new Image();
+  resultPhotoPreload.src = resultPhotoPreloadSrc;
 
   oracleStage.classList.add('show-result'); // mobile: switch to the result panel
   setState('loading');
@@ -1429,6 +1461,11 @@ function startCollapse(){
   var duration = 1800 + Math.random()*600;
 
   function tick(){
+    // A reset (initGame — Try Again, or the host page on close) bumps
+    // gameRound; if that happened since this tick loop started, stop
+    // instead of eventually calling showResult() and landing a stale
+    // round's result on what's now a fresh, idle panel.
+    if(round !== gameRound) return;
     var elapsed = Date.now() - startTime;
     var t = Math.min(elapsed/duration, 1);
     // Ease: accelerates then slows near end
@@ -1463,6 +1500,7 @@ function setSpinnerArc(p){
 function showResult(p1, p2){
   var fi = (p1.planet * 7 + p2.planet * 3 + p1.inv * 11 + p2.inv * 5) % FORECASTS.length;
   var pi = (p1.planet + p2.planet * 5 + p1.inv * 3) % PHOTOS.length;
+  var round = gameRound; // a reset while we're waiting on the photo below should drop this round, not reveal it late
 
   rpForecast.textContent = FORECASTS[fi];
 
@@ -1470,9 +1508,6 @@ function showResult(p1, p2){
   var p2Src = 'Identity/Icons/planets/' + P[p2.planet].key + (p2.inv ? '-dark' : '') + '.svg';
   rci1.innerHTML = '<img src="'+p1Src+'" alt="'+P[p1.planet].name+'">';
   rci2.innerHTML = '<img src="'+p2Src+'" alt="'+P[p2.planet].name+'">';
-
-  rpImg.src = PHOTOS[pi];
-  rpImg.onerror = function(){ rpImg.style.display='none'; };
 
   /* Start loading the download canvas's three source images RIGHT NOW, not
      when Download picture is clicked — waiting on these loads inside the
@@ -1489,16 +1524,39 @@ function showResult(p1, p2){
   DL_CACHE.planet1 = loadImg(window.EMBEDDED_PLANETS ? EMBEDDED_PLANETS[P[p1.planet].key + (p1.inv ? '-dark' : '')] : p1Src);
   DL_CACHE.planet2 = loadImg(window.EMBEDDED_PLANETS ? EMBEDDED_PLANETS[P[p2.planet].key + (p2.inv ? '-dark' : '')] : p2Src);
 
-  setState('result');
+  // Reveals the result panel only once the photo itself is actually ready —
+  // setting rpImg.src and switching the panel visible in the same tick
+  // (the old behavior) didn't blank the <img> in the meantime: Chrome keeps
+  // showing whatever bitmap was already decoded into it, i.e. the PREVIOUS
+  // round's photo, until the new one finishes loading. The startCollapse
+  // preload above almost always already has it ready by now (it's had the
+  // whole pause + spinner to load), so this is normally instant; it's only
+  // a real wait on a slow connection, which beats showing the wrong photo.
+  function revealResult(){
+    if(round !== gameRound) return; // reset while we were waiting on the photo — drop it, don't show it late
+    rpImg.src = PHOTOS[pi];
+    rpImg.onerror = function(){ rpImg.style.display='none'; };
+    setState('result');
 
-  // The seat panel keeps showing text here (not a button) once there's a
-  // result — Try Again and Download now live over the photo itself (see
-  // the fo-btn-top/-bottom CSS), and the footer label stays put always.
-  chooseText.innerHTML = 'Your<br>prediction';
-  tryAgainBtn.style.display = 'flex';
-  downloadBtn.style.display = 'flex';
+    // The seat panel keeps showing text here (not a button) once there's a
+    // result — Try Again and Download now live over the photo itself (see
+    // the fo-btn-top/-bottom CSS), and the footer label stays put always.
+    chooseText.innerHTML = 'Your<br>prediction';
+    tryAgainBtn.style.display = 'flex';
+    downloadBtn.style.display = 'flex';
 
-  gamePhase = 'result';
+    gamePhase = 'result';
+  }
+  if(resultPhotoPreload && resultPhotoPreloadSrc === PHOTOS[pi] && resultPhotoPreload.complete){
+    revealResult();
+  } else if(resultPhotoPreload && resultPhotoPreloadSrc === PHOTOS[pi]){
+    resultPhotoPreload.onload = revealResult;
+    resultPhotoPreload.onerror = revealResult; // don't hang forever if the photo 404s — rpImg's own onerror handles hiding it
+  } else {
+    // no matching preload in flight (shouldn't normally happen) — just
+    // reveal directly, same as before this fix
+    revealResult();
+  }
 }
 
 /* ── STATE SWITCHER ── */
