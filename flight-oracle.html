@@ -845,6 +845,21 @@ function planetSVG(pid, inv){
   return '<img src="'+src+'" alt="'+p.name+'">';
 }
 
+/* Deterministic: the same two seats always land on the same forecast, same
+   as before — but the old formula (planet*7 + planet*3 + inv*11 + inv*5)
+   topped out at 96 regardless of FORECASTS.length, so doubling the pool to
+   216 silently made the entire second batch unreachable (fi could never
+   exceed 96) along with most of the first — only 87 of the original 108
+   ever actually showed. id1/id2 (0–17, one per unique seat combo) times
+   9/16 was found by brute-force search over small coefficient pairs as one
+   that reaches all 216 indices across every one of the 306 possible
+   ordered pairs of the 18 seat combos. */
+function forecastIndexFor(p1, p2){
+  var id1 = p1.planet * 2 + p1.inv;
+  var id2 = p2.planet * 2 + p2.inv;
+  return (id1 * 9 + id2 * 16) % FORECASTS.length;
+}
+
 /* Every round shuffles the same 18 (planet, inv) combinations across the 18
    seats — a fresh game never needs a 19th icon — so there is no reason to
    wait for a seat click to be the first time any of them is fetched. The
@@ -1498,7 +1513,7 @@ function setSpinnerArc(p){
 
 /* ── RESULT ── */
 function showResult(p1, p2){
-  var fi = (p1.planet * 7 + p2.planet * 3 + p1.inv * 11 + p2.inv * 5) % FORECASTS.length;
+  var fi = forecastIndexFor(p1, p2);
   var pi = (p1.planet + p2.planet * 5 + p1.inv * 3) % PHOTOS.length;
   var round = gameRound; // a reset while we're waiting on the photo below should drop this round, not reveal it late
 
@@ -1950,7 +1965,7 @@ window.addEventListener('resize', measureTopbar);
     + '<div class="fo-footer-text">HOUSE OF WALK<br>QUANTUM COLLAPSE DEPARTMENT</div>';
 
   var p1 = doneA[1], p2 = doneA[10];
-  var fi = (p1.planet * 7 + p2.planet * 3 + p1.inv * 11 + p2.inv * 5) % FORECASTS.length;
+  var fi = forecastIndexFor(p1, p2);
   var pi = (p1.planet + p2.planet * 5 + p1.inv * 3) % PHOTOS.length;
   photoPanel.innerHTML = '<div class="rp-photo"><img src="'+PHOTOS[pi]+'" alt="">'
     + '<div class="rp-photo-tint"></div><div class="rp-photo-grain"></div></div>'
