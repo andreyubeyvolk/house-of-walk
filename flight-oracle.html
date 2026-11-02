@@ -1833,6 +1833,11 @@ themeBtn.addEventListener('click', function(){
 // matching whatever the site is already showing, not whatever this iframe
 // document itself last remembered from a previous visit.
 window.applyTheme = applyTheme;
+// Exposed the same way applyTheme is — so the host page can reset the game
+// the moment its own shutter closes (see closeFlightOracle in the site
+// integration), rather than leave whatever seats/result were on screen
+// sitting there for the next open. Same function Try Again already calls.
+window.initGame = initGame;
 if(document.documentElement.classList.contains('fo-embedded')){
   // First paint, before the host page gets a chance to call applyTheme
   // itself: read its theme straight off window.parent so there's no flash

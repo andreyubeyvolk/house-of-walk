@@ -994,7 +994,7 @@ body.theme-switching .tag{ transition:none; }
    — the game itself is a separate document (flight-oracle.html) in an
    iframe, not markup on this page, so there's nothing to lay out here
    beyond sizing and positioning that iframe. */
-.fo-trigger{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;padding:2px 0;transition:background-color .15s,color .15s;}
+.fo-trigger{background:transparent;border:none;color:inherit;font-family:inherit;font-size:inherit;cursor:pointer;padding:0;display:inline-block;vertical-align:baseline;transition:background-color .15s,color .15s;}
 @media(hover:hover){.fo-trigger:hover{background:var(--ink);color:var(--paper);}}
 #foShutter{ z-index:6; } /* over the grid, under the sticky topbar (10) and the photo layer (50) — same tier as the essay reader */
 #foShutter iframe{
@@ -3581,6 +3581,16 @@ body.theme-switching .tag{ transition:none; }
         if(foShutter.classList.contains('open')) return;
         document.body.style.overflow = '';
         unlockGutter();
+        // Reset only after the shutter has fully closed (not the instant
+        // Close is clicked) — resetting earlier would show the seat-picker
+        // flashing back into view while the panel is still visibly shrinking
+        // shut. The iframe itself is never reloaded on close (that's what
+        // keeps a game in progress alive across an accidental close), so
+        // without this a reopen just showed whatever was left on screen.
+        try{
+          var win = foFrame.contentWindow;
+          if(win && typeof win.initGame === 'function') win.initGame();
+        }catch(e){}
       }, 620); /* matches .about's own .6s clip-path transition, with a little slack */
       themeToggle.removeEventListener('click', closeFlightOracle);
       themeToggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light' : 'Dark';
