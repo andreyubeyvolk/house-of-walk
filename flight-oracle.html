@@ -200,8 +200,11 @@ html.fo-embedded body{background:transparent;}
 }
 .fo-footer-text{
   position:absolute;bottom:2.92%;left:50%;transform:translateX(-50%);
-  font-size:2.22cqw;color:var(--fo-ink);text-align:center;
+  font-size:2.22cqw;color:var(--fo-gray3);text-align:center;
   white-space:nowrap;line-height:1.2;
+  /* gray, not ink — this used to sit where the Try Again button lived and
+     reads like one at full ink contrast; it's just a label now, and the
+     dimmer color is what tells the player it isn't clickable. */
 }
 /* fo-btn-top/-bottom float directly on the RESULT photo (top/bottom edge,
    32px-equivalent margin, same small pill as each other) — on both desktop
@@ -308,6 +311,12 @@ html.fo-embedded body{background:transparent;}
 @media(hover:hover){
   .seat.done.hover-ready:hover .seat-info{opacity:1;}
 }
+/* forced on for both seats during the brief pause after the second pick
+   (see the seat click handler) — a real hover never happens on a tap, so
+   without this touch players never saw the planet names at all, only the
+   icons. Unconditional (no hover:hover guard): desktop gets it too, same
+   as it was already getting via hover anyway. */
+.seat.reveal-info .seat-info{opacity:1;}
 
 /* ── WING LINES ── */
 /* sized/positioned exactly as the Figma source vector: a kite-shaped
@@ -1290,6 +1299,7 @@ var PHOTOS = [
 /* ── STATE ── */
 var assignments = []; // {planet, state} × 18
 var picked = [];      // seat indices (0–17), max 2
+var pickedEls = [];   // the two actual seat elements just clicked, same order as picked
 var gamePhase = 'idle'; // idle | picking | loading | result
 
 /* ── SHUFFLE ── */
@@ -1339,10 +1349,11 @@ aboutOverlay.addEventListener('click', function(e){ if(e.target === aboutOverlay
 function initGame(){
   assignments = makeAssignments();
   picked = [];
+  pickedEls = [];
   gamePhase = 'idle';
 
   seats.forEach(function(s,i){
-    s.classList.remove('sel','done','hover-ready');
+    s.classList.remove('sel','done','hover-ready','reveal-info');
     s.querySelector('.seat-planet').classList.remove('vis');
     s.querySelector('.seat-planet').innerHTML = '';
     s.querySelector('.seat-label').style.opacity = '';
@@ -1383,10 +1394,17 @@ seats.forEach(function(el){
     el.addEventListener('mouseleave', function(){ el.classList.add('hover-ready'); }, {once:true});
 
     picked.push(idx);
+    pickedEls.push(el);
     gamePhase = 'picking';
 
     if(picked.length === 2){
       gamePhase = 'loading';
+      // Force both labels on for this same pause, not just the planet
+      // icons — .seat-info normally only shows on a real mouse hover (see
+      // its CSS), which never happens on a tap, so touch players were
+      // seeing two unlabeled globes and nothing more. el.appendChild above
+      // already attached each seat's own .seat-info span by this point.
+      pickedEls.forEach(function(seatEl){ seatEl.classList.add('reveal-info'); });
       // A beat to actually look at both revealed planets before the panel
       // switches to the loading spinner — 300ms read as "second click,
       // instant cut," not enough time to register what either seat turned

@@ -169,7 +169,7 @@ html,body{margin:0;padding:0;}
   html{scrollbar-width:none;}
 }
 .page-thumb{
-  position:fixed;right:0;top:0;width:8px;height:0;
+  position:fixed;right:0;top:0;width:4px;height:0;
   background:var(--ink);
   z-index:11;pointer-events:none;
   display:none;opacity:0;
@@ -4482,10 +4482,15 @@ body.theme-switching .tag{ transition:none; }
   pageThumb.setAttribute('aria-hidden','true');
   document.body.appendChild(pageThumb);
   var thumbRaf = 0;
+  var thumbHideTimer = 0;
   function updatePageThumb(){
     thumbRaf = 0;
     var essayEl = document.getElementById('essayReader');
-    if(viewer.classList.contains('open') || (essayEl && essayEl.classList.contains('open'))){
+    var foShutterEl = document.getElementById('foShutter');
+    if(viewer.classList.contains('open') || (essayEl && essayEl.classList.contains('open'))
+      || (foShutterEl && foShutterEl.classList.contains('open'))){
+      // Flight Oracle's own shutter has nothing to scroll (it's exactly one
+      // screen), so the page thumb has no business showing over it either.
       pageThumb.classList.remove('on');
       return;
     }
@@ -4499,6 +4504,11 @@ body.theme-switching .tag{ transition:none; }
     pageThumb.style.top = (top + Math.round((track - size) * (y / maxY))) + 'px';
     pageThumb.style.height = size + 'px';
     pageThumb.classList.add('on');
+    // Shows while actually scrolling, fades out once the page has been
+    // still for a moment — same "appear on scroll, fade at rest" read as a
+    // native iOS/Android scroll indicator, instead of sitting there always.
+    clearTimeout(thumbHideTimer);
+    thumbHideTimer = setTimeout(function(){ pageThumb.classList.remove('on'); }, 1000);
   }
   function schedulePageThumb(){ if(!thumbRaf) thumbRaf = requestAnimationFrame(updatePageThumb); }
   window.addEventListener('scroll', schedulePageThumb, {passive:true});
@@ -4508,6 +4518,8 @@ body.theme-switching .tag{ transition:none; }
     var thumbMO = new MutationObserver(schedulePageThumb);
     thumbMO.observe(viewer, {attributes:true, attributeFilter:['class']});
     thumbMO.observe(document.getElementById('essayReader'), {attributes:true, attributeFilter:['class']});
+    var thumbFoShutterEl = document.getElementById('foShutter');
+    if(thumbFoShutterEl) thumbMO.observe(thumbFoShutterEl, {attributes:true, attributeFilter:['class']});
   }
   schedulePageThumb();
 
