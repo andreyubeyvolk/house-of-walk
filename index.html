@@ -1311,6 +1311,14 @@ body.theme-switching .tag{ transition:none; }
     padding:var(--head-pt) var(--pad) var(--head-pb);
     transition:background-color .25s ease;
   }
+  /* .tagline is flex:0 0 auto (desktop has room to spare, so it never needs
+     to shrink) — on a narrow phone that's what let a long tagline overflow
+     the row instead of wrapping, shoving the Dark/Close button straight off
+     the right edge of the screen. Letting it shrink and wrap here keeps
+     .word and the button at their fixed sizes and gives the tagline
+     whatever's left, so the button always starts from the right edge
+     regardless of how long the tagline text is. */
+  .tagline{flex:1 1 auto;min-width:0;}
   /* every wider tier leaves the title as one nowrap line, deliberately --
      its own column ends wherever the sub/text column starts, and nothing
      else shares its row, so letting it overhang past that boundary into
@@ -1580,7 +1588,7 @@ body.theme-switching .tag{ transition:none; }
     <div><a class="byline-link" href="https://andreyubeyvolk.com/" target="_blank" rel="noopener noreferrer">A.UBV.</a></div>
   </div>
   <div class="tagline">
-    <div>A personal photo archive <span id="photoCount"></span></div>
+    <div>A personal photo archive</div>
     <div>and <button class="fo-trigger" id="foTrigger" type="button">Flight oracle</button></div>
   </div>
   <button class="theme-toggle plate-btn" id="themeToggle" type="button">Dark</button>
@@ -2257,20 +2265,6 @@ body.theme-switching .tag{ transition:none; }
       });
     });
   });
-
-  /* the count in the header tagline -- computed, not hand-typed, so it
-     never quietly drifts out of date the next time a trip's photos are
-     added or trimmed. Counts real photos only (entries with an actual
-     img), same distinction "isReal" makes above -- essay covers aren't in
-     ARCHIVE at all (see ESSAYS below), so they're already excluded. Runs
-     before alignTagline() (later in this script) sizes the header off
-     this element's own width, so the real, final text is what gets
-     measured, not a placeholder. */
-  var photoCountEl = document.getElementById('photoCount');
-  if(photoCountEl){
-    var realPhotoCount = ARCHIVE.filter(function(f){ return f.img; }).length;
-    photoCountEl.textContent = '['+pad(realPhotoCount)+'IMG]';
-  }
 
   /* essay covers: one per trip, inserted as the trip's own first grid cell
      (see gridHtml below). Sections are TODO placeholders — swap in the real
@@ -3536,6 +3530,21 @@ body.theme-switching .tag{ transition:none; }
     }
     foFrame.addEventListener('load', function(){ hideFoFrameTopbar(); syncFoTheme(); });
     window.addEventListener('resize', function(){ if(foShutter.classList.contains('open')) syncFoFrameTop(); });
+    /* Preload the game well before the first click, so the shutter drops
+       over a game that's already sitting there instead of a visible beat of
+       blank iframe followed by a separate pop-in once it finishes loading —
+       that lag was breaking the otherwise-instant feel the real shutter has
+       everywhere else on the site. Deferred to an idle moment (falling back
+       to a flat delay where requestIdleCallback doesn't exist) so it never
+       competes with the photo grid's own loading for the first paint. */
+    function preloadFlightOracle(){
+      if(!foFrame.getAttribute('src')) foFrame.src = 'flight-oracle.html';
+    }
+    if('requestIdleCallback' in window){
+      requestIdleCallback(preloadFlightOracle, {timeout: 4000});
+    } else {
+      setTimeout(preloadFlightOracle, 2000);
+    }
     function openFlightOracle(){
       /* don't layer this over another shutter that's already open — the
          essay reader's own open/close lives in a separate closure further

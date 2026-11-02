@@ -834,7 +834,11 @@ function planetInfoHTML(pid, inv){
   return P[pid].sub.toUpperCase() + '<br>[' + (inv ? 'DARK' : 'LIGHT') + ']';
 }
 
-/* ── FORECASTS (108 — 6 per Light/Dark state × 9 planets) ── */
+/* ── FORECASTS (216 — 12 per Light/Dark state × 9 planets, written as two
+   batches of 6: the first averages ~80 characters, the second (below the
+   first's 108) averages longer, up to ~160 — fi's hash isn't keyed to
+   position or length, so the two batches mix freely, not front/back-loaded
+   toward short or long results.) ── */
 var FORECASTS = [
   // SURYA — Light
   "Arrive early and claim the best light — the morning hour belongs to whoever shows up for it.",
@@ -962,6 +966,135 @@ var FORECASTS = [
   "The urge to skip the whole day and stay in is real. Resist it just this once.",
   "An old grief travels with you whether you invite it or not. Let it sit quietly, not drive.",
   "Something will end today — a leg of the trip, a conversation, a version of you. Let it.",
+
+  // ── Second batch (longer — the first averages ~80 characters, this one
+  //    targets closer to the full ~160 ceiling) ──
+  // SURYA — Light
+  "The version of you that shows up today — unhidden, unhurried, done apologizing for the good seat — photographs better than the cautious one ever could.",
+  "A room changes the moment you walk in like you belong there, shoulders down, pace unhurried. Today you do — act accordingly, and let everyone else catch up.",
+  "The light will not pause and wait politely for you to feel ready for it. Step into the frame anyway, a little unready — that is how the good ones start.",
+  "You are allowed to take up the whole doorway today, the whole table, the whole conversation. Nobody who matters is counting the inches you are using.",
+  "What you keep calling luck today is mostly just posture — chin level, pace unhurried, eyes meeting whatever is in front of them without flinching first.",
+  "Today rewards whoever arrives first and leaves last, nothing dramatic between. Somewhere in that quiet stretch, something worth remembering happens.",
+  // SURYA — Dark
+  "The need to document every single minute of today is costing you the minute itself. Put the camera down, once, and let the light do something unrecorded.",
+  "A performance staged for people who will have forgotten it by dinner is not worth the energy it drains from the actual day you are standing in now. Save it.",
+  "Today's applause is quieter than yesterday's, and that is not a demotion — it is an opening to hear something else in the room that the noise had been covering.",
+  "The itinerary built mainly to impress someone back home will exhaust the two of you who have to live through every overcrowded hour of it. Build a smaller one.",
+  "Not every silence in today's conversation needs filling with your own voice. Let someone else's story take the air for once, even a worse story than yours.",
+  "The brightest, most photogenic hour of the day is also the one most to burn out the actual detail in the shot. Wait patiently for the shade to come back around.",
+  // CHANDRA — Light
+  "The ache for a place you have not even reached yet is not impatience dressed up as feeling — it is the trip already finding its shape somewhere inside you.",
+  "Today's best decision will not survive a spreadsheet explained to someone practical. Make it anyway, on the strength of the feeling, and explain it later.",
+  "A tide you cannot see or name is moving you today, slower than weather and twice as reliable. Let the day drift a little instead of forcing it onto fixed rails.",
+  "The person you keep thinking of today, unprompted, between unrelated tasks, is almost thinking of you too, probably at the exact same unreasonable hour.",
+  "What feels like homesickness this morning will read as a good story by tonight, told to someone who was not there. Let the feeling move through, not camp.",
+  "The quiet hour before anyone else in the building is awake belongs to you today, uncontested. Do not trade it for a screen that could wait another hour.",
+  // CHANDRA — Dark
+  "The 3am version of today's plan, assembled half-asleep and fully convinced of itself, is not the real one. Let the sun come up before you trust a word of it.",
+  "A mood this strong, arriving this suddenly, rarely has a reason that survives daylight. Wait an hour before you act on whatever it is insisting you do.",
+  "You will read far too much into something small and probably unintentional today. The silence from home is not a message — most of the time, it is just silence.",
+  "The calm surface of today's plan is hiding more current underneath it than it is showing. Test it carefully with a toe first, not the whole afternoon at once.",
+  "Homesickness and plain hunger wear almost the same face by 4pm on a long day. Eat something concrete before you decide which of the two you are feeling.",
+  "What looked completely unmissable at midnight, lit by nothing but enthusiasm, will look optional by noon. Sleep on the plan before you spend real money on it.",
+  // MANGALA — Light
+  "The booking you have been overthinking for three straight days takes about four seconds once you finally just make it. Stop researching it and make it now.",
+  "Today's confrontation, handled quickly and without theatrics, will clear more air than a week of careful, polite avoidance ever managed to clear.",
+  "The door that looks firmly locked from where you stand is probably just stiff from disuse. Push harder before you decide today's answer is a flat no.",
+  "You are moving faster today than the doubt trying to catch up with you. Keep that pace and let the doubt arrive only after the decision is made.",
+  "A bold, oversized ask today lands better than the cautious, hedged version. The worst answer you get is the same no you would have gotten anyway.",
+  "The disagreement you walk into today, you end up winning by staying calmer than the other person expected you to be. Let them be the loud one in the room.",
+  // MANGALA — Dark
+  "The reply you are drafting now, heated and fully justified , will read very differently in an hour. Let it sit, unsent, before it goes to anyone at all.",
+  "Today's needless hurry will cost you the thing you were hurrying to see in the first place. Slow the last ten minutes down on purpose.",
+  "A stranger's small carelessness today is not worth spending the rest of your afternoon on. Let the irritation pass straight through you like ordinary weather.",
+  "The urge to win this one particular argument today is louder than the argument itself deserves. Ask honestly whether it will matter to anyone by next week.",
+  "Heat today, aimed at nothing in particular, just ends up burning whoever happens to be standing closest to it. Name what is wrong before saying anything else.",
+  "The itinerary you are forcing today is pushing back on you for an actual reason worth hearing out. Today is not the day to win that fight by force alone.",
+  // BUDHA — Light
+  "A question asked clumsily today in a language you barely speak gets you further than a perfectly phrased one asked in your own language ever quite manages to.",
+  "The stranger sitting at the next table over already has the exact answer you have been searching three apps for. It costs you turning around and asking.",
+  "Today's best plan is the one you overhear by accident, not the one you spent an hour researching last night. Keep both ears open at the counter and the bar.",
+  "A small, harmless lie you have been telling yourself about today's schedule gets gently exposed today by someone who was paying closer attention than you were.",
+  "The quick note you jot on a napkin today will matter more a year from now than the twenty careful photographs you also took of that exact same passing moment.",
+  "Your very first, quickest thought today turns out to be your best one too. Say it out loud before the second, more careful thought talks you politely out of it.",
+  // BUDHA — Dark
+  "The explanation you are building, clause by careful clause, is already three sentences longer than it strictly needs to be. Stop at the second one today.",
+  "A small, fixable detail in today's booking is wrong in a way that is still easy to correct. Check it now, before it quietly turns into a large, unfixable one.",
+  "Today's misunderstanding at the counter is nobody's fault and everybody's favorite story by tonight. Laugh about it now instead of arguing through it.",
+  "You will type a message today that ends up saying noticeably more than you actually meant. Read it back once, out loud, before it goes anywhere near send.",
+  "The group chat cannot agree on where to eat tonight because everyone involved is being polite instead of honest. Be the one person willing to just be honest.",
+  "A fact you are quite certain of is slightly out of date by today's standards. Check it once before you build the rest of the day's plan directly on top of it.",
+  // GURU — Light
+  "The upgrade you did not ask for finds its way to you today regardless. Say yes to it cleanly, without spending the next ten minutes deciding if you deserve it.",
+  "Someone today offers you more than the actual situation strictly requires. Jupiter is not being careless here — take the offer, and say a genuine thank you.",
+  "The one thing you almost skipped today for budget reasons turns out to be the single thing worth the entire trip. Spend the small extra amount today.",
+  "A small piece of advice you hand out lightly today lands far more heavily for whoever receives it. You will likely never know it, but today it mattered.",
+  "Today has quiet room in it for one more stop than the official plan allows for. Make the room anyway — the day is bigger than today's schedule admits.",
+  "Today's real teacher is not the person you were expecting — a driver, a market vendor, a kid on a bicycle. Listen carefully past who is actually speaking.",
+  // GURU — Dark
+  "The plan on paper has grown past what a single day can realistically hold. Cut a clean third of it out now, before the day itself cuts it out for you later.",
+  "A promise made generously and easily this morning gets more expensive to keep by this evening. Underpromise today on purpose; it costs considerably less later.",
+  "Today's optimism about the schedule is not malicious, simply mistaken about how long things take. Add a flat thirty minutes onto every single estimate you make.",
+  "More of a good thing today quietly stops being the good thing somewhere around the third helping of it. Pay attention to exactly where that line sits for you.",
+  "The grand, expensive gesture you are planning will mean less to them than a small, specific, well-chosen one would. Scale the whole thing down today.",
+  "Today rewards the traveler who says a clean no to one more stop, in favor of actually, seeing the handful already sitting on the list. Choose depth over count.",
+  // SHUKRA — Light
+  "The small, unlisted meal you almost skip today, because it was never on anyone's list, turns out to be the one you end up describing for years.",
+  "Beauty today asks nothing more of you than plain attention. Give it the full minute it deserves instead of the few seconds a photograph usually gets.",
+  "The company you deliberately keep today will outlast the view itself by decades. Choose the people around you with the same care you chose today's itinerary.",
+  "A small, deliberate extravagance today — the better table, the good bottle — is not indulgence so much as simply noticing, for once, that you actually can.",
+  "You will fall for one small detail today that nobody else in your group even noticed was there. Let that unnoticed detail be reason enough to linger a while.",
+  "The outfit that makes you feel good today is worth the extra five unhurried minutes it costs you this morning to put together properly. Wear the thing.",
+  // SHUKRA — Dark
+  "The prettier, more photogenic option today is hiding a cost that the plainer one simply was not. Ask the real price before you ask to see the view itself.",
+  "Comparing today, moment by moment, to a better day from an entirely different trip is quietly robbing both days of whatever actually happened in each of them.",
+  "The angle that flatters today's photograph is not always the one that tells the truth about the place itself. Look past the flattering angle just once.",
+  "A small amount of vanity today — the better light, the nicer chair — is harmless. A large amount of it costs you the company of whoever is standing beside you.",
+  "The bill for today's small indulgence arrives sooner than expected, and not always in money you can count. Pace yourself regardless of how good it feels.",
+  "What looks like real chemistry in this light tonight may simply be good lighting doing its job well. Give it until well past sunset before you believe it.",
+  // SHANI — Light
+  "The alarm you dread setting tonight is the only reason tomorrow's early, empty viewpoint belongs to you instead of to the much later, much larger crowd.",
+  "Today's slow, deeply unglamorous task is building something that the fast, exciting version of today would never have managed to build. Keep going anyway.",
+  "A limit you accept gracefully today, without a fight, becomes a structure you end up grateful for by the time the whole trip is finished. Accept it now.",
+  "The long queue tests you today for a reason that is worth learning something from. Stay in it longer than feels reasonable and notice what happens next.",
+  "Plain discipline, not passing inspiration, is what actually gets you to the sunrise viewpoint today. Inspiration, left to itself, would have quit an hour ago.",
+  "A boring, carefully planned day today will quietly outlast ten exciting, chaotic ones in what you remember from this trip a year from now. Choose boring.",
+  // SHANI — Dark
+  "Today's delay is not a punishment aimed at you personally; it is simply the schedule nobody told you about until right now. Sit with it instead of fighting it.",
+  "Something today will take roughly twice as long as it was promised to take. Budget for the wait itself rather than spending the wait fighting against it.",
+  "The plan you carefully built months ago is simply too rigid for the actual day that showed up instead. Let today rewrite the stiffest, least useful part of it.",
+  "A weight you have been carrying today — a heavy bag, an old grudge, a plan that no longer fits — is the real reason feels this heavy. Set one of them down.",
+  "Today is not the day for the most ambitious version of the itinerary. Choose the smaller version that actually gets everyone home safely and intact instead.",
+  "An old limitation resurfaces again today, entirely uninvited. It is not here to be fought outright, only acknowledged and carefully worked around once more.",
+  // RAHU — Light
+  "The place every guidebook quietly warns you away from today turns out to be the exact one you will still be describing, unprompted, a full decade from now.",
+  "An interest that makes no practical sense whatsoever today, followed anyway without apology, slowly becomes the actual subject of the entire trip in hindsight.",
+  "The border you keep circling on the map today exists mostly in your own hesitation, not on the ground. Cross it once, and the rest tends to follow easily.",
+  "A hunger today for something you cannot yet name is not a flaw in an otherwise good plan — it is's real, unwritten itinerary, waiting for you to notice it.",
+  "The unmarked road today gets you somewhere that the clearly marked one was specifically designed, by careful committee, to route every other visitor around.",
+  "You will want something today that mildly embarrasses you to even admit wanting out loud. Admit it anyway, if only to yourself, and see what happens next.",
+  // RAHU — Dark
+  "The shortcut that looks completely free today is charging you in a currency you have not actually noticed yet. Check the real cost twice before taking it.",
+  "An urgency today that nobody involved can quite explain is usually manufactured. The real deadline is softer than it is being sold to you as.",
+  "Wanting all of it at once today genuinely means experiencing almost none of it particularly well. Pick exactly one hunger today and feed that single one fully.",
+  "The promise a total stranger makes to you today is more thrilling to hear than it is reliable to actually bank on. Enjoy the thrill, keep the wallet closed.",
+  "A boundary worth holding firmly today is exactly, specifically the one you keep finding new reasons to cross. Notice that pattern before you act on it again.",
+  "What glitters invitingly past the car window today rarely survives the walk up to it in one piece. Walk up to it anyway today, eyes open, expectations modest.",
+  // KETU — Light
+  "The plan you were so tightly attached to just this morning can fully dissolve by afternoon, and something quietly better fills the exact space it leaves behind.",
+  "Today's best destination means absolutely nothing to anyone back home, and that is not a flaw in the choice at all — it is, in fact, the entire point of it.",
+  "Travel lighter today than the bag technically allows for. Leave one small assumption behind on purpose and notice how differently the day moves without it.",
+  "The earlier version of this trip, the one you carefully imagined months before arriving, can finally be released today in favor of the one happening around you.",
+  "An entirely empty afternoon today is not wasted time at all — it is simply the one slot in the whole schedule that has nothing left it needs to prove to anyone.",
+  "What you originally came here looking for has quietly already moved on without you. What finds you instead today, almost by accident, turns out to be better.",
+  // KETU — Dark
+  "The urge to disappear today, no messages, no check-ins, is real and understandable. Stay reachable to at least one specific person regardless of that urge.",
+  "Missing a place today before you have even properly left it is quietly stealing the remaining hours you still have left inside it. Come gently back to now.",
+  "Letting go of today's rigid plan is useful; letting go of your actual passport is not. Check the inside pocket one more time before you walk out the door.",
+  "The pull to skip the entire day and simply stay inside is strongest right before the day was about to surprise you pleasantly. Go out anyway, just this once.",
+  "An old grief is quietly traveling with you today whether it was formally invited along or not. Let it sit quietly in the back seat today, not take the wheel.",
+  "Something genuinely ends today — a leg of the trip, a particular conversation, a version of who you were at the very start of it. Let it end cleanly and well.",
 ];
 
 /* ── PHOTOS — curated pool across trips, background for the result card ── */
