@@ -828,6 +828,25 @@ function planetSVG(pid, inv){
   return '<img src="'+src+'" alt="'+p.name+'">';
 }
 
+/* Every round shuffles the same 18 (planet, inv) combinations across the 18
+   seats — a fresh game never needs a 19th icon — so there is no reason to
+   wait for a seat click to be the first time any of them is fetched. The
+   previous behavior only requested an icon's SVG the moment a seat was
+   clicked, which is exactly the empty beat players were seeing between the
+   click and the planet appearing: a real network fetch sitting in the
+   middle of what should be instant. Warming all 18 into the browser's own
+   image cache right away (one Image() per combo, discarded once loaded —
+   nothing is kept or shown) means that by the time any seat is clicked,
+   the actual render is just a cache hit. */
+(function preloadPlanetIcons(){
+  for(var i=0;i<P.length;i++){
+    for(var inv=0; inv<2; inv++){
+      var img = new Image();
+      img.src = 'Identity/Icons/planets/' + P[i].key + (inv ? '-dark' : '') + '.svg';
+    }
+  }
+})();
+
 /* abbreviation + Light/Dark shown on hover once a seat is revealed, so the
    player can tell what they picked without re-memorizing 18 icons */
 function planetInfoHTML(pid, inv){
@@ -1362,7 +1381,12 @@ seats.forEach(function(el){
 
     if(picked.length === 2){
       gamePhase = 'loading';
-      setTimeout(startCollapse, 300);
+      // A beat to actually look at both revealed planets before the panel
+      // switches to the loading spinner — 300ms read as "second click,
+      // instant cut," not enough time to register what either seat turned
+      // out to be. gamePhase is already 'loading' here, so a third click
+      // during this pause is a no-op, same as it always was.
+      setTimeout(startCollapse, 1100);
     }
   });
 });
